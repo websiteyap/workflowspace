@@ -2,6 +2,7 @@ import { ArrowLeft, Code2, ExternalLink, Mail, Phone, TrendingDown, Wallet } fro
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { CashflowChart } from "@/components/charts/cashflow-chart"
+import { Markdown } from "@/components/shared/markdown"
 import { QuickTask } from "@/components/shared/quick-task"
 import { StatCard } from "@/components/shared/stat-card"
 import { StatusBadge } from "@/components/shared/status-badge"
@@ -181,7 +182,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       {project.description && (
         <section className="rounded-xl border bg-card p-4">
           <h2 className="mb-2 text-sm font-medium">Proje notu</h2>
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{project.description}</p>
+          <Markdown source={project.description} className="text-muted-foreground" />
           {project.stack && (
             <div className="mt-3 flex flex-wrap gap-1.5">
               {project.stack.split(",").map((s: string) => (
@@ -307,7 +308,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 {notes.map((n) => (
                   <li key={n.id} className="px-4 py-3">
                     <p className="text-sm font-medium">{n.title}</p>
-                    <p className="mt-0.5 line-clamp-3 whitespace-pre-wrap text-xs text-muted-foreground">{n.content}</p>
+                    <div className="mt-0.5 line-clamp-3 text-xs text-muted-foreground">
+                      <Markdown source={n.content} />
+                    </div>
                   </li>
                 ))}
               </ul>

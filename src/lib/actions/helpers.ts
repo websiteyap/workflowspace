@@ -1,6 +1,7 @@
 import "server-only"
 import { randomUUID } from "node:crypto"
 import { requireSession } from "@/lib/auth/guard"
+import { captureError } from "@/lib/observability"
 
 export type ActionState = { ok?: boolean; error?: string; id?: string; stage?: string } | null
 
@@ -46,7 +47,9 @@ export async function run(fn: () => Promise<ActionState>): Promise<ActionState> 
     return await fn()
   } catch (e) {
     if (e instanceof ActionError) return { error: e.message }
+    if (e instanceof Error && e.message.startsWith("Oturum")) return { error: e.message }
     console.error(e)
+    void captureError(e, "server-action")
     const msg = e instanceof Error ? e.message : "Bilinmeyen hata"
     return { error: `İşlem başarısız: ${msg}` }
   }

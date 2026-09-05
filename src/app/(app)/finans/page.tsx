@@ -3,12 +3,21 @@ import Link from "next/link"
 import { Suspense } from "react"
 import { CashflowChart } from "@/components/charts/cashflow-chart"
 import { CategoryBars } from "@/components/charts/category-bars"
+import { FxChart } from "@/components/charts/fx-chart"
 import { PageHeader } from "@/components/shared/page-header"
 import { StatCard } from "@/components/shared/stat-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatBase, fromBase, monthRange } from "@/lib/format"
 import { moneyContext } from "@/lib/display-currency"
-import { cashflowSeries, categoryBreakdown, financeSummary, lookups, reservedTotal, transactionsList } from "@/lib/queries"
+import {
+  cashflowSeries,
+  categoryBreakdown,
+  financeSummary,
+  fxHistory,
+  lookups,
+  reservedTotal,
+  transactionsList,
+} from "@/lib/queries"
 import { cn } from "@/lib/utils"
 import { NewTransactionButton, TransactionsTable } from "./finance-client"
 
@@ -64,7 +73,7 @@ export default async function FinancePage({
     lookups(),
     moneyContext(),
   ])
-  const reserved = await reservedTotal()
+  const [reserved, fxSeries] = await Promise.all([reservedTotal(), fxHistory(90)])
   const { display, rates } = mc
   const fmt = (v: number) => formatBase(v, display, rates)
   const chartData = series.map((s) => ({
@@ -151,6 +160,16 @@ export default async function FinancePage({
           </div>
         </section>
       </div>
+
+      <section className="rounded-xl border bg-card">
+        <div className="border-b px-4 py-3">
+          <h2 className="text-sm font-medium">Kur geçmişi</h2>
+          <p className="text-xs text-muted-foreground">Son 90 gün · 1 birim kaç TL</p>
+        </div>
+        <div className="p-4">
+          <FxChart data={fxSeries} />
+        </div>
+      </section>
 
       <Suspense fallback={<Skeleton className="h-64 w-full" />}>
         <TransactionsTable

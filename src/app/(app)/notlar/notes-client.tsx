@@ -6,6 +6,7 @@ import { ConfirmDialog } from "@/components/forms/form-dialog"
 import { NoteDialog } from "@/components/forms/note-dialog"
 import type { Lookup } from "@/components/forms/project-dialog"
 import { EmptyState } from "@/components/shared/empty-state"
+import { Markdown } from "@/components/shared/markdown"
 import { PageHeader } from "@/components/shared/page-header"
 import { Button } from "@/components/ui/button"
 import {
@@ -15,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import type { Note } from "@/db/schema"
 import { useNewParam } from "@/hooks/use-new-param"
@@ -33,6 +35,7 @@ function tagsOf(note: Note) {
 
 function NoteCard({ note, projects }: { note: NoteRow; projects: Lookup[] }) {
   const [edit, setEdit] = React.useState(false)
+  const [view, setView] = React.useState(false)
   const [del, setDel] = React.useState(false)
   const [, start] = React.useTransition()
   const tags = tagsOf(note)
@@ -72,10 +75,10 @@ function NoteCard({ note, projects }: { note: NoteRow; projects: Lookup[] }) {
         </div>
       </div>
 
-      <button type="button" onClick={() => setEdit(true)} className="mt-2 flex-1 text-left">
-        <p className="line-clamp-6 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
-          {note.content || "Boş not"}
-        </p>
+      <button type="button" onClick={() => setView(true)} className="mt-2 flex-1 overflow-hidden text-left">
+        <div className="line-clamp-6 text-muted-foreground [&_*]:text-muted-foreground">
+          {note.content ? <Markdown source={note.content} /> : <p className="text-sm">Boş not</p>}
+        </div>
       </button>
 
       {tags.length > 0 && (
@@ -94,6 +97,19 @@ function NoteCard({ note, projects }: { note: NoteRow; projects: Lookup[] }) {
       </div>
 
       <NoteDialog note={note} projects={projects} open={edit} onOpenChange={setEdit} />
+      <Dialog open={view} onOpenChange={setView}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto scrollbar-thin sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{note.title}</DialogTitle>
+          </DialogHeader>
+          <Markdown source={note.content || "_Boş not_"} />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" onClick={() => { setView(false); setEdit(true) }}>
+              Düzenle
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <ConfirmDialog
         open={del}
         onOpenChange={setDel}

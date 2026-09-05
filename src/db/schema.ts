@@ -216,6 +216,66 @@ export const goalContributions = sqliteTable(
   (t) => [index("contrib_goal_idx").on(t.goalId), index("contrib_tx_idx").on(t.transactionId)],
 )
 
+export const auditLog = sqliteTable(
+  "audit_log",
+  {
+    id: text("id").primaryKey(),
+    action: text("action").notNull(),
+    entity: text("entity").notNull(),
+    entityId: text("entity_id"),
+    summary: text("summary"),
+    sessionId: text("session_id"),
+    ip: text("ip"),
+    createdAt: text("created_at").notNull().default(now),
+  },
+  (t) => [index("audit_created_idx").on(t.createdAt)],
+)
+
+export const errorLog = sqliteTable(
+  "error_log",
+  {
+    id: text("id").primaryKey(),
+    message: text("message").notNull(),
+    stack: text("stack"),
+    context: text("context"),
+    level: text("level").notNull().default("error"),
+    createdAt: text("created_at").notNull().default(now),
+  },
+  (t) => [index("error_created_idx").on(t.createdAt)],
+)
+
+export const loginAttempts = sqliteTable("login_attempts", {
+  key: text("key").primaryKey(),
+  count: integer("count").notNull().default(0),
+  resetAt: text("reset_at").notNull(),
+})
+
+export const pushSubscriptions = sqliteTable("push_subscriptions", {
+  endpoint: text("endpoint").primaryKey(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  userAgent: text("user_agent"),
+  createdAt: text("created_at").notNull().default(now),
+})
+
+export const portfolioSnapshots = sqliteTable("portfolio_snapshots", {
+  date: text("date").primaryKey(),
+  valueBase: integer("value_base").notNull(),
+  costBase: integer("cost_base").notNull(),
+  createdAt: text("created_at").notNull().default(now),
+})
+
+export const priceHistory = sqliteTable(
+  "price_history",
+  {
+    id: text("id").primaryKey(),
+    coinId: text("coin_id").notNull(),
+    date: text("date").notNull(),
+    priceUsd: text("price_usd").notNull(),
+  },
+  (t) => [index("price_history_coin_idx").on(t.coinId, t.date)],
+)
+
 export const wallets = sqliteTable("wallets", {
   id: text("id").primaryKey(),
   label: text("label").notNull(),
@@ -322,6 +382,8 @@ export const settings = sqliteTable("settings", {
 })
 
 export type FxRateRow = typeof fxRates.$inferSelect
+export type AuditEntry = typeof auditLog.$inferSelect
+export type ErrorEntry = typeof errorLog.$inferSelect
 export type Wallet = typeof wallets.$inferSelect
 export type Holding = typeof holdings.$inferSelect
 export type AlertRule = typeof alertRules.$inferSelect

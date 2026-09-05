@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/db"
 import { requireSession } from "@/lib/auth/guard"
+import { audit } from "@/lib/observability"
 import { goalContributions, payments, transactions } from "@/db/schema"
 import { addMonths, toMinor, todayISO } from "@/lib/format"
 import { convertToBase } from "@/lib/fx"
@@ -95,6 +96,7 @@ async function applyGoalAllocation(
 export async function deleteTransaction(id: string) {
   await requireSession()
   await db.delete(transactions).where(eq(transactions.id, id))
+  await audit("delete", "transaction", { entityId: id })
   touch()
 }
 
@@ -135,6 +137,7 @@ export async function savePayment(_prev: ActionState, fd: FormData): Promise<Act
 export async function deletePayment(id: string) {
   await requireSession()
   await db.delete(payments).where(eq(payments.id, id))
+  await audit("delete", "payment", { entityId: id })
   touch()
 }
 

@@ -6,7 +6,7 @@ import { type LibSQLDatabase, drizzle } from "drizzle-orm/libsql"
 import * as schema from "./schema"
 
 const url = process.env.DATABASE_URL ?? "file:./data/source.db"
-const SCHEMA_VERSION = "5"
+const SCHEMA_VERSION = "6"
 
 const globalForDb = globalThis as unknown as {
   __sourceDbClient?: Client
@@ -226,6 +226,51 @@ const DDL = [
   )`,
   `CREATE INDEX IF NOT EXISTS contrib_goal_idx ON goal_contributions(goal_id)`,
   `CREATE INDEX IF NOT EXISTS contrib_tx_idx ON goal_contributions(transaction_id)`,
+  `CREATE TABLE IF NOT EXISTS audit_log (
+    id TEXT PRIMARY KEY,
+    action TEXT NOT NULL,
+    entity TEXT NOT NULL,
+    entity_id TEXT,
+    summary TEXT,
+    session_id TEXT,
+    ip TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS audit_created_idx ON audit_log(created_at)`,
+  `CREATE TABLE IF NOT EXISTS error_log (
+    id TEXT PRIMARY KEY,
+    message TEXT NOT NULL,
+    stack TEXT,
+    context TEXT,
+    level TEXT NOT NULL DEFAULT 'error',
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS error_created_idx ON error_log(created_at)`,
+  `CREATE TABLE IF NOT EXISTS login_attempts (
+    key TEXT PRIMARY KEY,
+    count INTEGER NOT NULL DEFAULT 0,
+    reset_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS push_subscriptions (
+    endpoint TEXT PRIMARY KEY,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    user_agent TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+    date TEXT PRIMARY KEY,
+    value_base INTEGER NOT NULL,
+    cost_base INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS price_history (
+    id TEXT PRIMARY KEY,
+    coin_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    price_usd TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS price_history_coin_idx ON price_history(coin_id, date)`,
   `CREATE TABLE IF NOT EXISTS wallets (
     id TEXT PRIMARY KEY,
     label TEXT NOT NULL,

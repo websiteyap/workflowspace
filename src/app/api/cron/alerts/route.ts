@@ -1,6 +1,8 @@
 import { timingSafeEqual } from "node:crypto"
 import { NextResponse } from "next/server"
-import { cronToken, runAlertCheck } from "@/lib/alerts"
+import { cronToken } from "@/lib/alerts"
+import { captureError } from "@/lib/observability"
+import { runTick } from "@/lib/tick"
 
 export const dynamic = "force-dynamic"
 
@@ -14,6 +16,11 @@ export async function GET(request: Request) {
     return new NextResponse("unauthorized", { status: 401 })
   }
 
-  const result = await runAlertCheck()
-  return NextResponse.json(result)
+  try {
+    const result = await runTick()
+    return NextResponse.json(result)
+  } catch (error) {
+    await captureError(error, "cron-tick")
+    return NextResponse.json({ error: "tick failed" }, { status: 500 })
+  }
 }

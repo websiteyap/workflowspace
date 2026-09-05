@@ -2,6 +2,7 @@ import "server-only"
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, lte, ne, sql } from "drizzle-orm"
 import { db, ready } from "@/db"
 import {
+  fxRates,
   goalContributions,
   goals,
   notes,
@@ -43,27 +44,71 @@ export async function lookups() {
 
 export async function searchIndex() {
   await ready()
-  const [p, n] = await Promise.all([
+  const [projectRows, noteRows, goalRows, taskRows, paymentRows, domainRows] = await Promise.all([
     db
-      .select({ id: projects.id, label: projects.name, sub: projects.clientName })
+      .select({ id: projects.id, label: projects.name, sub: projects.clientName, status: projects.status })
       .from(projects)
+      .limit(200),
+    db.select({ id: notes.id, label: notes.title, sub: notes.tags }).from(notes).limit(150),
+    db.select({ id: goals.id, label: goals.title, sub: goals.type }).from(goals).limit(100),
+    db
+      .select({ id: tasks.id, label: tasks.title, sub: tasks.dueDate })
+      .from(tasks)
+      .where(ne(tasks.status, "done"))
       .limit(150),
-    db.select({ id: notes.id, label: notes.title, sub: notes.tags }).from(notes).limit(100),
+    db
+      .select({ id: payments.id, label: payments.title, sub: payments.dueDate })
+      .from(payments)
+      .where(eq(payments.status, "pending"))
+      .limit(100),
+    db
+      .select({ id: projectDomains.id, label: projectDomains.host, projectId: projectDomains.projectId })
+      .from(projectDomains)
+      .limit(100),
   ])
+
   return [
-    ...p.map((x) => ({
+    ...projectRows.map((x) => ({
       id: `p-${x.id}`,
       label: x.label,
       sub: x.sub ?? undefined,
       href: `/projeler/${x.id}`,
-      group: "Projeler",
+      group: "İşler",
     })),
-    ...n.map((x) => ({
+    ...taskRows.map((x) => ({
+      id: `t-${x.id}`,
+      label: x.label,
+      sub: x.sub ?? undefined,
+      href: "/gorevler",
+      group: "Görevler",
+    })),
+    ...goalRows.map((x) => ({
+      id: `g-${x.id}`,
+      label: x.label,
+      sub: x.sub ?? undefined,
+      href: "/hedefler",
+      group: "Hedefler",
+    })),
+    ...noteRows.map((x) => ({
       id: `n-${x.id}`,
       label: x.label,
       sub: x.sub ?? undefined,
       href: "/notlar",
       group: "Notlar",
+    })),
+    ...paymentRows.map((x) => ({
+      id: `pay-${x.id}`,
+      label: x.label,
+      sub: x.sub ?? undefined,
+      href: "/odemeler",
+      group: "Ödemeler",
+    })),
+    ...domainRows.map((x) => ({
+      id: `d-${x.id}`,
+      label: x.label,
+      sub: undefined,
+      href: `/projeler/${x.projectId}`,
+      group: "Alan adları",
     })),
   ]
 }
@@ -489,6 +534,33 @@ export async function reservedTotal() {
     .innerJoin(goals, eq(goalContributions.goalId, goals.id))
     .where(eq(goals.status, "open"))
   return Number(row?.total ?? 0)
+}
+
+export async function fxHistory(days = 90) {
+  await ready()
+  const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10)
+  const rows = await db
+    .select()
+    .from(fxRates)
+    .where(gte(fxRates.date, since))
+    .orderBy(asc(fxRates.date))
+
+  return rows
+    .map((row) => {
+      try {
+        const rates = JSON.parse(row.rates) as Record<string, number>
+        return {
+          date: row.date,
+          label: new Date(`${row.date}T00:00:00`).toLocaleDateString("tr-TR", { day: "2-digit", month: "short" }),
+          USD: Number(rates.USD ?? 0),
+          EUR: Number(rates.EUR ?? 0),
+          GBP: Number(rates.GBP ?? 0),
+        }
+      } catch {
+        return null
+      }
+    })
+    .filter((x): x is { date: string; label: string; USD: number; EUR: number; GBP: number } => x !== null)
 }
 
 export async function dataCounts() {

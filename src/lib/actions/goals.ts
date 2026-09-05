@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/db"
 import { requireSession } from "@/lib/auth/guard"
+import { audit } from "@/lib/observability"
 import { goalContributions, goals, transactions } from "@/db/schema"
 import { toMinor, todayISO } from "@/lib/format"
 import { convertToBase } from "@/lib/fx"
@@ -52,6 +53,7 @@ export async function saveGoal(_prev: ActionState, fd: FormData): Promise<Action
 export async function deleteGoal(id: string) {
   await requireSession()
   await db.delete(goals).where(eq(goals.id, id))
+  await audit("delete", "goal", { entityId: id })
   touch()
 }
 

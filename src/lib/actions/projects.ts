@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/db"
 import { requireSession } from "@/lib/auth/guard"
+import { audit } from "@/lib/observability"
 import { projectDomains, projectItems, projects } from "@/db/schema"
 import { CYCLE_MONTHS } from "@/lib/constants"
 import { addMonths, toMinor, todayISO } from "@/lib/format"
@@ -96,6 +97,7 @@ export async function saveProject(_prev: ActionState, fd: FormData): Promise<Act
 export async function deleteProjectById(id: string) {
   await requireSession()
   await db.delete(projects).where(eq(projects.id, id))
+  await audit("delete", "project", { entityId: id })
   touch()
 }
 

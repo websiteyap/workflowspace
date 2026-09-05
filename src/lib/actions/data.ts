@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { db } from "@/db"
 import { requireSession } from "@/lib/auth/guard"
+import { audit } from "@/lib/observability"
 import {
   goalContributions,
   goals,
@@ -32,6 +33,7 @@ export async function clearAllData() {
   await db.delete(projectItems)
   await db.delete(projectDomains)
   await db.delete(projects)
+  await audit("clear", "database", { summary: "tum veri silindi" })
   touchAll()
 }
 
@@ -130,6 +132,7 @@ export async function importData(json: string) {
     return { error: "İçe aktarma sırasında hata oluştu. Veriler kısmen yüklenmiş olabilir." }
   }
 
+  await audit("import", "database", { summary: JSON.stringify(counts) })
   touchAll()
   return { ok: true, counts }
 }

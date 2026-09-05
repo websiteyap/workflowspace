@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { db } from "@/db"
 import { vaultItems } from "@/db/schema"
 import { requireSession } from "@/lib/auth/guard"
+import { audit } from "@/lib/observability"
 import { getSetting, setSetting } from "@/lib/auth/store"
 import { newId, nowISO } from "./helpers"
 
@@ -24,6 +25,7 @@ export async function initVault(salt: string, check: string) {
 
   await setSetting(VAULT_SALT, salt)
   await setSetting(VAULT_CHECK, check)
+  await audit("init", "vault")
   revalidatePath("/kasa")
   return { ok: true }
 }
@@ -42,6 +44,7 @@ export async function saveVaultItem(id: string | null, cipher: string) {
   } else {
     await db.insert(vaultItems).values({ id: newId(), cipher, createdAt: nowISO(), updatedAt: nowISO() })
   }
+  await audit(id ? "update" : "create", "vault_item", { entityId: id })
   revalidatePath("/kasa")
   return { ok: true }
 }
@@ -49,6 +52,7 @@ export async function saveVaultItem(id: string | null, cipher: string) {
 export async function deleteVaultItem(id: string) {
   await requireSession()
   await db.delete(vaultItems).where(eq(vaultItems.id, id))
+  await audit("delete", "vault_item", { entityId: id })
   revalidatePath("/kasa")
 }
 

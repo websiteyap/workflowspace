@@ -1,8 +1,8 @@
-import { desc } from "drizzle-orm"
+import { asc, desc, gte } from "drizzle-orm"
 import { db, ready } from "@/db"
-import { alertEvents, alertRules, holdings, wallets } from "@/db/schema"
+import { alertEvents, alertRules, holdings, portfolioSnapshots, wallets } from "@/db/schema"
 import { moneyContext } from "@/lib/display-currency"
-import { rateFor } from "@/lib/format"
+import { fromBase, rateFor } from "@/lib/format"
 import { getQuotes } from "@/lib/market"
 import { InvestmentsClient, type Position } from "./investments-client"
 
@@ -19,6 +19,13 @@ export default async function InvestmentsPage() {
     moneyContext(),
   ])
 
+  const since = new Date(Date.now() - 180 * 86_400_000).toISOString().slice(0, 10)
+  const snapshots = await db
+    .select()
+    .from(portfolioSnapshots)
+    .where(gte(portfolioSnapshots.date, since))
+    .orderBy(asc(portfolioSnapshots.date))
+
   const quotes = await getQuotes(
     rows.filter((r) => r.coinId).map((r) => ({ coinId: r.coinId as string, symbol: r.symbol })),
   )
@@ -27,7 +34,11 @@ export default async function InvestmentsPage() {
   const positions: Position[] = rows.map((row) => {
     const quote = row.coinId ? (quotes.get(row.coinId) ?? null) : null
     const amount = Number(row.amount) || 0
-    const valueBase = quote ? Math.round(quote.priceUsd * amount * usdRate * 100) : 0
+    const valueBase = quote
+      ? Math.round(quote.priceUsd * amount * usdRate * 100)
+      : row.manualPrice
+        ? Math.round(row.manualPrice * amount * rateFor(row.currency, money.rates))
+        : 0
     const costBase = row.baseCost ?? 0
     const pnlBase = costBase > 0 ? valueBase - costBase : 0
     return {
@@ -40,9 +51,17 @@ export default async function InvestmentsPage() {
     }
   })
 
+  const history = snapshots.map((s) => ({
+    date: s.date,
+    label: new Date(`${s.date}T00:00:00`).toLocaleDateString("tr-TR", { day: "2-digit", month: "short" }),
+    value: fromBase(s.valueBase, money.display, money.rates) / 100,
+    cost: fromBase(s.costBase, money.display, money.rates) / 100,
+  }))
+
   return (
     <InvestmentsClient
       positions={positions}
+      history={history}
       wallets={walletRows}
       rules={rules}
       events={events}

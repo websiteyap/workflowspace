@@ -7,6 +7,7 @@ import {
   Loader2,
   MoreHorizontal,
   Pencil,
+  AlertTriangle,
   Plus,
   TrendingUp,
   Trash2,
@@ -43,6 +44,7 @@ import {
   toggleAlertRule,
 } from "@/lib/actions/investments"
 import { CURRENCIES, type RateMap, formatBase, formatDateTime, minorToInput } from "@/lib/format"
+import { PortfolioChart, type PortfolioPoint } from "@/components/charts/portfolio-chart"
 import { cn } from "@/lib/utils"
 
 export type Quote = {
@@ -82,11 +84,20 @@ const EXPLORERS: Record<string, string> = {
   tron: "https://tronscan.org/#/address/",
 }
 
+const KINDS = [
+  { value: "crypto", label: "Kripto (canlı fiyat)" },
+  { value: "manual", label: "Diğer (elle fiyat)" },
+]
+
 const ALERT_KINDS = [
   { value: "price_below", label: "Fiyat altına inerse ($)" },
   { value: "price_above", label: "Fiyat üstüne çıkarsa ($)" },
   { value: "drop_24h", label: "24 saatte düşerse (%)" },
   { value: "rise_24h", label: "24 saatte çıkarsa (%)" },
+  { value: "sma50_cross_down", label: "50 günlük ortalamanın altına inerse" },
+  { value: "sma50_cross_up", label: "50 günlük ortalamayı geçerse" },
+  { value: "rsi_below", label: "RSI altına inerse (30)" },
+  { value: "rsi_above", label: "RSI üstüne çıkarsa (70)" },
 ]
 
 function CoinPicker({
@@ -185,6 +196,7 @@ function HoldingDialog({
   trigger?: React.ReactNode
 }) {
   const [currency, setCurrency] = React.useState(holding?.currency ?? "TRY")
+  const [kind, setKind] = React.useState(holding?.kind ?? "crypto")
 
   return (
     <FormDialog
@@ -192,18 +204,39 @@ function HoldingDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={holding ? "Varlığı düzenle" : "Varlık ekle"}
-      description="Fiyatlar CoinGecko'dan canlı çekilir; miktarı ve maliyeti sen girersin."
+      description="Kriptoda fiyat canlı çekilir; diğer varlıklarda birim fiyatı sen girersin."
       action={saveHolding}
       successMessage={holding ? "Güncellendi" : "Eklendi"}
     >
       {holding && <input type="hidden" name="id" value={holding.id} />}
-      <input type="hidden" name="kind" value="crypto" />
       <FormGrid>
-        <CoinPicker
-          defaultCoinId={holding?.coinId}
-          defaultSymbol={holding?.symbol}
-          defaultName={holding?.name}
+        <SelectField
+          name="kind"
+          label="Varlık türü"
+          options={KINDS}
+          defaultValue={kind}
+          onValueChange={setKind}
+          full
         />
+        {kind === "crypto" ? (
+          <CoinPicker
+            defaultCoinId={holding?.coinId}
+            defaultSymbol={holding?.symbol}
+            defaultName={holding?.name}
+          />
+        ) : (
+          <>
+            <TextField name="symbol" label="Sembol" required defaultValue={holding?.symbol ?? ""} placeholder="GRAM ALTIN" />
+            <TextField name="name" label="Ad" defaultValue={holding?.name ?? ""} placeholder="Gram altın" />
+            <MoneyField
+              name="manualPrice"
+              label="Birim fiyat"
+              currency={currency}
+              defaultValue={minorToInput(holding?.manualPrice)}
+              hint="Güncel birim fiyatı elle güncellersin"
+            />
+          </>
+        )}
         <TextField name="amount" label="Miktar" required defaultValue={holding?.amount ?? ""} placeholder="0.25" />
         <SelectField
           name="walletId"
@@ -238,6 +271,7 @@ export function InvestmentsClient({
   wallets,
   rules,
   events,
+  history,
   display,
   rates,
   usdRate,
@@ -246,6 +280,7 @@ export function InvestmentsClient({
   wallets: WalletRow[]
   rules: AlertRule[]
   events: AlertEvent[]
+  history: PortfolioPoint[]
   display: string
   rates: RateMap
   usdRate: number
@@ -265,6 +300,14 @@ export function InvestmentsClient({
   const pnlPercent = totalCost > 0 ? (pnl / totalCost) * 100 : null
   const unread = events.filter((e) => !e.readAt)
   const anyStale = positions.some((p) => p.quote?.stale)
+
+  const concentration = React.useMemo(() => {
+    if (totalValue <= 0) return null
+    const top = [...positions].sort((a, b) => b.valueBase - a.valueBase)[0]
+    if (!top) return null
+    const percent = (top.valueBase / totalValue) * 100
+    return percent >= 60 ? { symbol: top.symbol, percent } : null
+  }, [positions, totalValue])
 
   return (
     <div className="space-y-6">
@@ -305,6 +348,30 @@ export function InvestmentsClient({
         <p className="rounded-lg border border-amber-500/30 bg-amber-500/[0.04] px-4 py-2.5 text-xs text-muted-foreground">
           Bazı fiyatlar güncellenemedi, önbellekteki son değerler gösteriliyor.
         </p>
+      )}
+
+      {concentration && (
+        <div className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.04] p-4 sm:flex-row sm:items-center">
+          <AlertTriangle className="size-5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <p className="flex-1 text-sm">
+            <span className="font-medium">Portföyün %{concentration.percent.toFixed(0)}&apos;i {concentration.symbol}&apos;de.</span>{" "}
+            <span className="text-muted-foreground">
+              Tek varlıkta yoğunlaşma riski artırır; dağıtmayı değerlendirebilirsin.
+            </span>
+          </p>
+        </div>
+      )}
+
+      {positions.length > 0 && (
+        <section className="rounded-xl border bg-card">
+          <div className="border-b px-4 py-3">
+            <h2 className="text-sm font-medium">Portföy geçmişi</h2>
+            <p className="text-xs text-muted-foreground">Günlük anlık görüntüler · {display}</p>
+          </div>
+          <div className="p-4">
+            <PortfolioChart data={history} currency={display} />
+          </div>
+        </section>
       )}
 
       {unread.length > 0 && (
