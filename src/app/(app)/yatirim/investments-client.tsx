@@ -9,6 +9,7 @@ import {
   Pencil,
   AlertTriangle,
   Plus,
+  RefreshCw,
   TrendingUp,
   Trash2,
   Wallet,
@@ -22,6 +23,14 @@ import { PageHeader } from "@/components/shared/page-header"
 import { StatCard } from "@/components/shared/stat-card"
 import { Button } from "@/components/ui/button"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -33,14 +42,17 @@ import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { AlertEvent, AlertRule, Holding, Wallet as WalletRow } from "@/db/schema"
 import {
+  addWalletToken,
   deleteAlertRule,
   deleteHolding,
   deleteWallet,
   findCoins,
   markAlertsRead,
+  removeWalletBalance,
   saveAlertRule,
   saveHolding,
   saveWallet,
+  syncWallets,
   toggleAlertRule,
 } from "@/lib/actions/investments"
 import { CURRENCIES, type RateMap, formatBase, formatDateTime, minorToInput } from "@/lib/format"
@@ -55,6 +67,19 @@ export type Quote = {
   change24h: number
   updatedAt: string
   stale: boolean
+}
+
+export type WalletRowWithBalances = WalletRow & {
+  balances: {
+    id: string
+    kind: string
+    symbol: string
+    amount: string
+    coinId: string | null
+    valueBase: number
+    updatedAt: string
+  }[]
+  totalBase: number
 }
 
 export type Position = Holding & {
@@ -277,7 +302,7 @@ export function InvestmentsClient({
   usdRate,
 }: {
   positions: Position[]
-  wallets: WalletRow[]
+  wallets: WalletRowWithBalances[]
   rules: AlertRule[]
   events: AlertEvent[]
   history: PortfolioPoint[]
@@ -291,6 +316,9 @@ export function InvestmentsClient({
   const [addRule, setAddRule] = React.useState(false)
   const [delHolding, setDelHolding] = React.useState<Position | null>(null)
   const [delWallet, setDelWallet] = React.useState<WalletRow | null>(null)
+  const [syncing, setSyncing] = React.useState(false)
+  const [tokenFor, setTokenFor] = React.useState<string | null>(null)
+  const [tokenContract, setTokenContract] = React.useState("")
   const [, start] = React.useTransition()
 
   const fmt = (v: number) => formatBase(v, display, rates)
@@ -535,40 +563,107 @@ export function InvestmentsClient({
         </section>
 
         <section className="rounded-xl border bg-card">
-          <div className="border-b px-4 py-3">
-            <h2 className="text-sm font-medium">Cüzdanlar</h2>
-            <p className="text-xs text-muted-foreground">Sadece referans — private key hiçbir zaman girilmez</p>
+          <div className="flex items-center justify-between border-b px-4 py-3">
+            <div>
+              <h2 className="text-sm font-medium">Cüzdanlar</h2>
+              <p className="text-xs text-muted-foreground">Sadece okuma — private key hiçbir zaman istenmez</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={syncing || wallets.length === 0}
+              onClick={() =>
+                start(async () => {
+                  setSyncing(true)
+                  try {
+                    const result = await syncWallets()
+                    if (result.errors.length > 0) {
+                      toast.warning(result.updated + " güncellendi, " + result.errors.length + " hata")
+                    } else {
+                      toast.success(result.updated + " bakiye güncellendi")
+                    }
+                  } finally {
+                    setSyncing(false)
+                  }
+                })
+              }
+            >
+              {syncing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+              Bakiyeleri çek
+            </Button>
           </div>
           {wallets.length === 0 ? (
             <p className="px-4 py-6 text-sm text-muted-foreground">Cüzdan eklenmedi.</p>
           ) : (
             <ul className="divide-y">
               {wallets.map((w) => (
-                <li key={w.id} className="flex items-center gap-3 px-4 py-3">
-                  <Wallet className="size-4 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">{w.label}</p>
-                    <p className="truncate font-mono text-xs text-muted-foreground">{w.address}</p>
-                  </div>
-                  {EXPLORERS[w.chain] && (
-                    <a
-                      href={`${EXPLORERS[w.chain]}${w.address}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-muted-foreground hover:text-foreground"
-                      title="Explorer'da aç"
+                <li key={w.id} className="px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <Wallet className="size-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{w.label}</p>
+                      <p className="truncate font-mono text-xs text-muted-foreground">{w.address}</p>
+                    </div>
+                    {w.totalBase > 0 && <span className="shrink-0 text-sm font-medium tabular">{fmt(w.totalBase)}</span>}
+                    {EXPLORERS[w.chain] && (
+                      <a
+                        href={EXPLORERS[w.chain] + w.address}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-muted-foreground hover:text-foreground"
+                        title="Explorer"
+                      >
+                        <ExternalLink className="size-4" />
+                      </a>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 text-muted-foreground"
+                      title="Token ekle"
+                      onClick={() => setTokenFor(w.id)}
                     >
-                      <ExternalLink className="size-4" />
-                    </a>
+                      <Plus className="size-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => setDelWallet(w)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+
+                  {w.balances.length > 0 && (
+                    <ul className="mt-2 space-y-1 pl-7">
+                      {w.balances.map((b) => (
+                        <li key={b.id} className="flex items-center gap-2 text-xs">
+                          <span className="font-medium">{b.symbol}</span>
+                          <span className="tabular text-muted-foreground">{b.amount}</span>
+                          {b.valueBase > 0 && (
+                            <span className="tabular text-muted-foreground">· {fmt(b.valueBase)}</span>
+                          )}
+                          {b.kind === "token" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="ml-auto size-6 text-muted-foreground hover:text-destructive"
+                              onClick={() =>
+                                start(async () => {
+                                  await removeWalletBalance(b.id)
+                                  toast.success("Kaldırıldı")
+                                })
+                              }
+                            >
+                              <Trash2 className="size-3" />
+                            </Button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => setDelWallet(w)}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
                 </li>
               ))}
             </ul>
@@ -629,6 +724,46 @@ export function InvestmentsClient({
           <TextField name="note" label="Not" placeholder="Alım bölgesi" />
         </div>
       </FormDialog>
+
+      <Dialog open={tokenFor !== null} onOpenChange={(o) => !o && setTokenFor(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Token ekle</DialogTitle>
+            <DialogDescription>
+              Takip etmek istediğin token kontrat adresini yapıştır. Sembol ve ondalık bilgisi zincirden okunur.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={tokenContract}
+            onChange={(e) => setTokenContract(e.target.value)}
+            placeholder="0x…"
+            className="font-mono text-xs"
+          />
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setTokenFor(null)}>
+              Vazgeç
+            </Button>
+            <Button
+              disabled={!tokenContract.trim() || tokenFor === null}
+              onClick={() =>
+                start(async () => {
+                  if (!tokenFor) return
+                  const result = await addWalletToken(tokenFor, tokenContract)
+                  if (result.error) {
+                    toast.error(result.error)
+                    return
+                  }
+                  toast.success(result.symbol + " eklendi, bakiyeleri çekmeyi unutma")
+                  setTokenFor(null)
+                  setTokenContract("")
+                })
+              }
+            >
+              Ekle
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={delHolding !== null}

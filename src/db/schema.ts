@@ -301,6 +301,24 @@ export const wallets = sqliteTable("wallets", {
   createdAt: text("created_at").notNull().default(now),
 })
 
+export const walletBalances = sqliteTable(
+  "wallet_balances",
+  {
+    id: text("id").primaryKey(),
+    walletId: text("wallet_id")
+      .notNull()
+      .references(() => wallets.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull().default("native"),
+    contract: text("contract"),
+    symbol: text("symbol").notNull(),
+    decimals: integer("decimals").notNull().default(18),
+    coinId: text("coin_id"),
+    amount: text("amount").notNull().default("0"),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [index("wallet_balances_wallet_idx").on(t.walletId)],
+)
+
 export const holdings = sqliteTable(
   "holdings",
   {
@@ -402,6 +420,7 @@ export type Passkey = typeof passkeys.$inferSelect
 export type AuditEntry = typeof auditLog.$inferSelect
 export type ErrorEntry = typeof errorLog.$inferSelect
 export type Wallet = typeof wallets.$inferSelect
+export type WalletBalance = typeof walletBalances.$inferSelect
 export type Holding = typeof holdings.$inferSelect
 export type AlertRule = typeof alertRules.$inferSelect
 export type AlertEvent = typeof alertEvents.$inferSelect

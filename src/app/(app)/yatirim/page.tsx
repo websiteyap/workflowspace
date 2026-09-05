@@ -1,6 +1,6 @@
 import { asc, desc, gte } from "drizzle-orm"
 import { db, ready } from "@/db"
-import { alertEvents, alertRules, holdings, portfolioSnapshots, wallets } from "@/db/schema"
+import { alertEvents, alertRules, holdings, portfolioSnapshots, walletBalances, wallets } from "@/db/schema"
 import { moneyContext } from "@/lib/display-currency"
 import { fromBase, rateFor } from "@/lib/format"
 import { getQuotes } from "@/lib/market"
@@ -11,9 +11,10 @@ export const metadata = { title: "Yatırım" }
 
 export default async function InvestmentsPage() {
   await ready()
-  const [rows, walletRows, rules, events, money] = await Promise.all([
+  const [rows, walletRows, balanceRows, rules, events, money] = await Promise.all([
     db.select().from(holdings).orderBy(desc(holdings.updatedAt)),
     db.select().from(wallets).orderBy(desc(wallets.createdAt)),
+    db.select().from(walletBalances),
     db.select().from(alertRules).orderBy(desc(alertRules.createdAt)),
     db.select().from(alertEvents).orderBy(desc(alertEvents.createdAt)).limit(20),
     moneyContext(),
@@ -26,9 +27,12 @@ export default async function InvestmentsPage() {
     .where(gte(portfolioSnapshots.date, since))
     .orderBy(asc(portfolioSnapshots.date))
 
-  const quotes = await getQuotes(
-    rows.filter((r) => r.coinId).map((r) => ({ coinId: r.coinId as string, symbol: r.symbol })),
-  )
+  const quotes = await getQuotes([
+    ...rows.filter((r) => r.coinId).map((r) => ({ coinId: r.coinId as string, symbol: r.symbol })),
+    ...balanceRows
+      .filter((b) => b.coinId)
+      .map((b) => ({ coinId: b.coinId as string, symbol: b.symbol })),
+  ])
   const usdRate = rateFor("USD", money.rates)
 
   const positions: Position[] = rows.map((row) => {
@@ -51,6 +55,26 @@ export default async function InvestmentsPage() {
     }
   })
 
+  const walletsWithBalances = walletRows.map((w) => {
+    const balances = balanceRows
+      .filter((b) => b.walletId === w.id)
+      .map((b) => {
+        const quote = b.coinId ? quotes.get(b.coinId) : null
+        const amount = Number(b.amount) || 0
+        return {
+          id: b.id,
+          kind: b.kind,
+          symbol: b.symbol,
+          amount: b.amount,
+          coinId: b.coinId,
+          valueBase: quote ? Math.round(quote.priceUsd * amount * usdRate * 100) : 0,
+          updatedAt: b.updatedAt,
+        }
+      })
+      .sort((a, b) => b.valueBase - a.valueBase)
+    return { ...w, balances, totalBase: balances.reduce((a, b) => a + b.valueBase, 0) }
+  })
+
   const history = snapshots.map((s) => ({
     date: s.date,
     label: new Date(`${s.date}T00:00:00`).toLocaleDateString("tr-TR", { day: "2-digit", month: "short" }),
@@ -62,7 +86,7 @@ export default async function InvestmentsPage() {
     <InvestmentsClient
       positions={positions}
       history={history}
-      wallets={walletRows}
+      wallets={walletsWithBalances}
       rules={rules}
       events={events}
       display={money.display}

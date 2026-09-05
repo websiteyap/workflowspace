@@ -6,7 +6,7 @@ import { type LibSQLDatabase, drizzle } from "drizzle-orm/libsql"
 import * as schema from "./schema"
 
 const url = process.env.DATABASE_URL ?? "file:./data/source.db"
-const SCHEMA_VERSION = "7"
+const SCHEMA_VERSION = "8"
 
 const globalForDb = globalThis as unknown as {
   __sourceDbClient?: Client
@@ -291,6 +291,18 @@ const DDL = [
     notes TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   )`,
+  `CREATE TABLE IF NOT EXISTS wallet_balances (
+    id TEXT PRIMARY KEY,
+    wallet_id TEXT NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL DEFAULT 'native',
+    contract TEXT,
+    symbol TEXT NOT NULL,
+    decimals INTEGER NOT NULL DEFAULT 18,
+    coin_id TEXT,
+    amount TEXT NOT NULL DEFAULT '0',
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS wallet_balances_wallet_idx ON wallet_balances(wallet_id)`,
   `CREATE TABLE IF NOT EXISTS holdings (
     id TEXT PRIMARY KEY,
     kind TEXT NOT NULL DEFAULT 'crypto',
