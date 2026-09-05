@@ -16,7 +16,6 @@ export async function saveTask(_prev: ActionState, fd: FormData): Promise<Action
     const status = str(fd, "status") ?? "todo"
     const data = {
       projectId: ref(fd, "projectId"),
-      clientId: ref(fd, "clientId"),
       title: reqStr(fd, "title", "Görev başlığı"),
       description: str(fd, "description"),
       status,

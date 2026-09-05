@@ -6,7 +6,8 @@ import { CategoryBars } from "@/components/charts/category-bars"
 import { PageHeader } from "@/components/shared/page-header"
 import { StatCard } from "@/components/shared/stat-card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { money, monthRange } from "@/lib/format"
+import { formatBase, fromBase, monthRange } from "@/lib/format"
+import { moneyContext } from "@/lib/display-currency"
 import { cashflowSeries, categoryBreakdown, financeSummary, lookups, transactionsList } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 import { NewTransactionButton, TransactionsTable } from "./finance-client"
@@ -54,14 +55,23 @@ export default async function FinancePage({
   const period = sp.period ?? "month"
   const range = resolvePeriod(period)
 
-  const [summary, series, incomeCats, expenseCats, txs, look] = await Promise.all([
+  const [summary, series, incomeCats, expenseCats, txs, look, mc] = await Promise.all([
     financeSummary(range.from, range.to),
     cashflowSeries(range.months),
     categoryBreakdown("income", range.from, range.to),
     categoryBreakdown("expense", range.from, range.to),
     transactionsList({ from: range.from, to: range.to }),
     lookups(),
+    moneyContext(),
   ])
+  const { display, rates } = mc
+  const fmt = (v: number) => formatBase(v, display, rates)
+  const chartData = series.map((s) => ({
+    ...s,
+    income: fromBase(s.income, display, rates) / 100,
+    expense: fromBase(s.expense, display, rates) / 100,
+    net: fromBase(s.net, display, rates) / 100,
+  }))
 
   const margin = summary.income > 0 ? Math.round((summary.net / summary.income) * 100) : 0
 
@@ -69,10 +79,10 @@ export default async function FinancePage({
     <div className="space-y-6">
       <PageHeader
         title="Gelir / Gider"
-        description={`${range.label} · ${summary.count} hareket`}
+        description={`${range.label} · ${summary.count} hareket · ${display} cinsinden`}
         actions={
           <Suspense fallback={null}>
-            <NewTransactionButton clients={look.clients} projects={look.projects} />
+            <NewTransactionButton projects={look.projects} />
           </Suspense>
         }
       />
@@ -93,11 +103,11 @@ export default async function FinancePage({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Toplam gelir" value={money(summary.income)} icon={TrendingUp} />
-        <StatCard label="Toplam gider" value={money(summary.expense)} icon={TrendingDown} />
+        <StatCard label="Toplam gelir" value={fmt(summary.income)} icon={TrendingUp} />
+        <StatCard label="Toplam gider" value={fmt(summary.expense)} icon={TrendingDown} />
         <StatCard
           label="Net"
-          value={money(summary.net)}
+          value={fmt(summary.net)}
           icon={Wallet}
           accent={summary.net >= 0 ? "positive" : "negative"}
         />
@@ -110,7 +120,7 @@ export default async function FinancePage({
           <p className="text-xs text-muted-foreground">Son {range.months} ay</p>
         </div>
         <div className="p-4">
-          <CashflowChart data={series} />
+          <CashflowChart data={chartData} currency={display} />
         </div>
       </section>
 
@@ -121,7 +131,7 @@ export default async function FinancePage({
             <p className="text-xs text-muted-foreground">{range.label}</p>
           </div>
           <div className="p-4">
-            <CategoryBars data={incomeCats} variant="income" emptyText="Bu dönemde gelir kaydı yok" />
+            <CategoryBars data={incomeCats} variant="income" display={display} rates={rates} emptyText="Bu dönemde gelir kaydı yok" />
           </div>
         </section>
         <section className="rounded-xl border bg-card">
@@ -130,13 +140,13 @@ export default async function FinancePage({
             <p className="text-xs text-muted-foreground">{range.label}</p>
           </div>
           <div className="p-4">
-            <CategoryBars data={expenseCats} variant="expense" emptyText="Bu dönemde gider kaydı yok" />
+            <CategoryBars data={expenseCats} variant="expense" display={display} rates={rates} emptyText="Bu dönemde gider kaydı yok" />
           </div>
         </section>
       </div>
 
       <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-        <TransactionsTable transactions={txs} clients={look.clients} projects={look.projects} />
+        <TransactionsTable transactions={txs} projects={look.projects} display={display} rates={rates} />
       </Suspense>
     </div>
   )

@@ -6,7 +6,6 @@ import {
   ListChecks,
   NotebookPen,
   Settings,
-  Users,
 } from "lucide-react"
 
 export type NavItem = {
@@ -29,15 +28,20 @@ export const NAV: { group: string; items: NavItem[] }[] = [
   {
     group: "İş",
     items: [
-      { href: "/musteriler", label: "Müşteriler", icon: Users, description: "Müşteri kartları ve iletişim", shortcut: "4" },
-      { href: "/projeler", label: "Projeler", icon: FolderKanban, description: "Aktif ve biten projeler", shortcut: "5" },
+      {
+        href: "/projeler",
+        label: "İşler",
+        icon: FolderKanban,
+        description: "Projeler, müşteriler, döngüsel ücretler",
+        shortcut: "4",
+      },
     ],
   },
   {
     group: "Finans",
     items: [
-      { href: "/odemeler", label: "Ödemeler", icon: CreditCard, description: "Tahsilatlar ve vade takibi", shortcut: "6" },
-      { href: "/finans", label: "Gelir / Gider", icon: BarChart3, description: "Nakit akışı ve raporlar", shortcut: "7" },
+      { href: "/odemeler", label: "Ödemeler", icon: CreditCard, description: "Tahsilatlar ve vade takibi", shortcut: "5" },
+      { href: "/finans", label: "Gelir / Gider", icon: BarChart3, description: "Nakit akışı ve raporlar", shortcut: "6" },
     ],
   },
   {

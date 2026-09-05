@@ -1,41 +1,42 @@
 import "server-only"
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, lte, ne, sql } from "drizzle-orm"
 import { db, ready } from "@/db"
-import { clients, notes, payments, projects, tasks, transactions } from "@/db/schema"
+import { notes, payments, projectDomains, projectItems, projects, tasks, transactions } from "@/db/schema"
+import { CYCLE_MONTHS } from "./constants"
 import { monthRange, todayISO } from "./format"
+
+const sumTx = sql<number>`coalesce(sum(${transactions.baseAmount}), 0)`
+const sumPay = sql<number>`coalesce(sum(${payments.baseAmount}), 0)`
 
 export async function lookups() {
   await ready()
-  const [c, p] = await Promise.all([
-    db.select({ value: clients.id, label: clients.name }).from(clients).orderBy(asc(clients.name)),
-    db
-      .select({ value: projects.id, label: projects.name })
-      .from(projects)
-      .where(ne(projects.status, "cancelled"))
-      .orderBy(asc(projects.name)),
-  ])
-  return { clients: c, projects: p }
+  const rows = await db
+    .select({ value: projects.id, label: projects.name, clientName: projects.clientName })
+    .from(projects)
+    .where(ne(projects.status, "cancelled"))
+    .orderBy(asc(projects.name))
+  return {
+    projects: rows.map((r) => ({
+      value: r.value,
+      label: r.clientName ? `${r.label} — ${r.clientName}` : r.label,
+    })),
+  }
 }
 
 export async function searchIndex() {
   await ready()
-  const [c, p, n] = await Promise.all([
-    db.select({ id: clients.id, label: clients.name, sub: clients.company }).from(clients).limit(100),
-    db.select({ id: projects.id, label: projects.name }).from(projects).limit(100),
+  const [p, n] = await Promise.all([
+    db
+      .select({ id: projects.id, label: projects.name, sub: projects.clientName })
+      .from(projects)
+      .limit(150),
     db.select({ id: notes.id, label: notes.title, sub: notes.tags }).from(notes).limit(100),
   ])
   return [
-    ...c.map((x) => ({
-      id: `c-${x.id}`,
-      label: x.label,
-      sub: x.sub ?? undefined,
-      href: `/musteriler/${x.id}`,
-      group: "Müşteriler",
-    })),
     ...p.map((x) => ({
       id: `p-${x.id}`,
       label: x.label,
-      sub: undefined,
+      sub: x.sub ?? undefined,
       href: `/projeler/${x.id}`,
       group: "Projeler",
     })),
@@ -49,8 +50,133 @@ export async function searchIndex() {
   ]
 }
 
-const sumAmount = sql<number>`coalesce(sum(${transactions.amount}), 0)`
-const sumPayment = sql<number>`coalesce(sum(${payments.amount}), 0)`
+function monthlyValue(price: number | null, cycle: string) {
+  const months = CYCLE_MONTHS[cycle] ?? 0
+  if (!price || months === 0) return 0
+  return Math.round(price / months)
+}
+
+export async function projectsOverview() {
+  await ready()
+  const today = todayISO()
+
+  const rows = await db
+    .select({
+      project: projects,
+      openTasks: sql<number>`(select count(*) from tasks t where t.project_id = ${projects.id} and t.status != 'done')`,
+      doneTasks: sql<number>`(select count(*) from tasks t where t.project_id = ${projects.id} and t.status = 'done')`,
+      earned: sql<number>`(select coalesce(sum(t.base_amount),0) from transactions t where t.project_id = ${projects.id} and t.type = 'income')`,
+      spent: sql<number>`(select coalesce(sum(t.base_amount),0) from transactions t where t.project_id = ${projects.id} and t.type = 'expense')`,
+      recurringCharges: sql<number>`(select coalesce(sum(i.base_amount),0) from project_items i where i.project_id = ${projects.id} and i.recurring = 1 and i.kind = 'charge')`,
+      recurringCosts: sql<number>`(select coalesce(sum(i.base_amount),0) from project_items i where i.project_id = ${projects.id} and i.recurring = 1 and i.kind = 'cost')`,
+      domainCount: sql<number>`(select count(*) from project_domains d where d.project_id = ${projects.id})`,
+      primaryDomain: sql<string | null>`(select d.host from project_domains d where d.project_id = ${projects.id} order by d.is_primary desc limit 1)`,
+    })
+    .from(projects)
+    .orderBy(desc(projects.updatedAt))
+
+  return rows.map((r) => {
+    const base = r.project.basePrice ?? 0
+    const charges = Number(r.recurringCharges)
+    const costs = Number(r.recurringCosts)
+    const cycleRevenue = base + charges
+    return {
+      ...r.project,
+      openTasks: Number(r.openTasks),
+      doneTasks: Number(r.doneTasks),
+      earned: Number(r.earned),
+      spent: Number(r.spent),
+      recurringCharges: charges,
+      recurringCosts: costs,
+      cycleRevenue,
+      cycleNet: cycleRevenue - costs,
+      monthlyRevenue: monthlyValue(cycleRevenue, r.project.billingCycle),
+      monthlyNet: monthlyValue(cycleRevenue - costs, r.project.billingCycle),
+      domainCount: Number(r.domainCount),
+      primaryDomain: r.primaryDomain,
+      paymentDue:
+        r.project.nextPaymentDate && r.project.status === "active" ? r.project.nextPaymentDate <= today : false,
+    }
+  })
+}
+
+export type ProjectOverviewRow = Awaited<ReturnType<typeof projectsOverview>>[number]
+
+export async function projectDetail(id: string) {
+  await ready()
+  const [project] = await db.select().from(projects).where(eq(projects.id, id))
+  if (!project) return null
+
+  const [domains, items, projectTasks, projectPayments, projectTx, projectNotes] = await Promise.all([
+    db.select().from(projectDomains).where(eq(projectDomains.projectId, id)).orderBy(desc(projectDomains.isPrimary)),
+    db.select().from(projectItems).where(eq(projectItems.projectId, id)).orderBy(desc(projectItems.createdAt)),
+    db.select().from(tasks).where(eq(tasks.projectId, id)).orderBy(asc(tasks.status), asc(tasks.dueDate)),
+    db.select().from(payments).where(eq(payments.projectId, id)).orderBy(asc(payments.dueDate)),
+    db.select().from(transactions).where(eq(transactions.projectId, id)).orderBy(desc(transactions.date)),
+    db.select().from(notes).where(eq(notes.projectId, id)).orderBy(desc(notes.updatedAt)),
+  ])
+
+  const earned = projectTx.filter((t) => t.type === "income").reduce((a, b) => a + b.baseAmount, 0)
+  const spent = projectTx.filter((t) => t.type === "expense").reduce((a, b) => a + b.baseAmount, 0)
+  const oneOffCosts = items
+    .filter((i) => i.recurring === 0 && i.kind === "cost")
+    .reduce((a, b) => a + b.baseAmount, 0)
+  const oneOffCharges = items
+    .filter((i) => i.recurring === 0 && i.kind === "charge")
+    .reduce((a, b) => a + b.baseAmount, 0)
+  const recurringCharges = items
+    .filter((i) => i.recurring === 1 && i.kind === "charge")
+    .reduce((a, b) => a + b.baseAmount, 0)
+  const recurringCosts = items
+    .filter((i) => i.recurring === 1 && i.kind === "cost")
+    .reduce((a, b) => a + b.baseAmount, 0)
+
+  const cycleRevenue = (project.basePrice ?? 0) + recurringCharges
+  const pending = projectPayments.filter((p) => p.status === "pending").reduce((a, b) => a + b.baseAmount, 0)
+
+  const monthly = new Map<string, { income: number; expense: number }>()
+  for (const t of projectTx) {
+    const key = t.date.slice(0, 7)
+    const entry = monthly.get(key) ?? { income: 0, expense: 0 }
+    if (t.type === "income") entry.income += t.baseAmount
+    else entry.expense += t.baseAmount
+    monthly.set(key, entry)
+  }
+  const series: { month: string; label: string; income: number; expense: number; net: number }[] = []
+  for (let i = 11; i >= 0; i--) {
+    const r = monthRange(-i)
+    const key = r.start.slice(0, 7)
+    const entry = monthly.get(key) ?? { income: 0, expense: 0 }
+    series.push({
+      month: key,
+      label: new Date(`${key}-01T00:00:00`).toLocaleDateString("tr-TR", { month: "short" }),
+      income: entry.income,
+      expense: entry.expense,
+      net: entry.income - entry.expense,
+    })
+  }
+
+  return {
+    project,
+    domains,
+    items,
+    tasks: projectTasks,
+    payments: projectPayments,
+    transactions: projectTx,
+    notes: projectNotes,
+    earned,
+    spent,
+    pending,
+    oneOffCosts,
+    oneOffCharges,
+    recurringCharges,
+    recurringCosts,
+    cycleRevenue,
+    cycleNet: cycleRevenue - recurringCosts,
+    monthlyRevenue: monthlyValue(cycleRevenue, project.billingCycle),
+    series,
+  }
+}
 
 export async function dashboardData() {
   await ready()
@@ -58,6 +184,7 @@ export async function dashboardData() {
   const cur = monthRange(0)
   const prev = monthRange(-1)
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
+  const soon = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10)
 
   const [
     todayTasks,
@@ -67,12 +194,13 @@ export async function dashboardData() {
     curMonth,
     prevMonth,
     activeProjects,
+    duePayments,
     pinnedNotes,
-    activeClientCount,
     activeProjectCount,
     openTaskCount,
     receivables,
     weekDone,
+    expiringDomains,
   ] = await Promise.all([
     db
       .select({ task: tasks, projectName: projects.name })
@@ -88,51 +216,88 @@ export async function dashboardData() {
       .orderBy(asc(tasks.dueDate))
       .limit(8),
     db
-      .select({ payment: payments, clientName: clients.name })
+      .select({ payment: payments, projectName: projects.name })
       .from(payments)
-      .leftJoin(clients, eq(payments.clientId, clients.id))
+      .leftJoin(projects, eq(payments.projectId, projects.id))
       .where(and(eq(payments.status, "pending"), gte(payments.dueDate, today)))
       .orderBy(asc(payments.dueDate))
       .limit(6),
     db
-      .select({ payment: payments, clientName: clients.name })
+      .select({ payment: payments, projectName: projects.name })
       .from(payments)
-      .leftJoin(clients, eq(payments.clientId, clients.id))
+      .leftJoin(projects, eq(payments.projectId, projects.id))
       .where(and(eq(payments.status, "pending"), sql`${payments.dueDate} < ${today}`))
       .orderBy(asc(payments.dueDate)),
     db
-      .select({ type: transactions.type, total: sumAmount })
+      .select({ type: transactions.type, total: sumTx })
       .from(transactions)
       .where(and(gte(transactions.date, cur.start), lte(transactions.date, cur.end)))
       .groupBy(transactions.type),
     db
-      .select({ type: transactions.type, total: sumAmount })
+      .select({ type: transactions.type, total: sumTx })
       .from(transactions)
       .where(and(gte(transactions.date, prev.start), lte(transactions.date, prev.end)))
       .groupBy(transactions.type),
     db
-      .select({ project: projects, clientName: clients.name })
+      .select()
       .from(projects)
-      .leftJoin(clients, eq(projects.clientId, clients.id))
-      .where(inArray(projects.status, ["active", "planned"]))
-      .orderBy(asc(projects.dueDate))
-      .limit(6),
+      .where(inArray(projects.status, ["active", "lead"]))
+      .orderBy(asc(projects.nextPaymentDate))
+      .limit(8),
+    db
+      .select()
+      .from(projects)
+      .where(
+        and(
+          eq(projects.status, "active"),
+          isNotNull(projects.nextPaymentDate),
+          lte(projects.nextPaymentDate, soon),
+        ),
+      )
+      .orderBy(asc(projects.nextPaymentDate)),
     db.select().from(notes).where(eq(notes.pinned, 1)).orderBy(desc(notes.updatedAt)).limit(4),
-    db.select({ n: count() }).from(clients).where(eq(clients.status, "active")),
     db.select({ n: count() }).from(projects).where(eq(projects.status, "active")),
     db.select({ n: count() }).from(tasks).where(ne(tasks.status, "done")),
     db
-      .select({ total: sumPayment })
+      .select({ total: sumPay })
       .from(payments)
       .where(and(eq(payments.status, "pending"), eq(payments.direction, "incoming"))),
     db
       .select({ n: count() })
       .from(tasks)
       .where(and(eq(tasks.status, "done"), isNotNull(tasks.completedAt), gte(tasks.completedAt, weekAgo))),
+    db
+      .select({ domain: projectDomains, projectName: projects.name })
+      .from(projectDomains)
+      .leftJoin(projects, eq(projectDomains.projectId, projects.id))
+      .where(and(isNotNull(projectDomains.expiresAt), lte(projectDomains.expiresAt, soon)))
+      .orderBy(asc(projectDomains.expiresAt))
+      .limit(5),
   ])
 
   const pick = (rows: { type: string; total: number }[], t: string) =>
     Number(rows.find((r) => r.type === t)?.total ?? 0)
+
+  const recurring = await db
+    .select({
+      projectId: projectItems.projectId,
+      kind: projectItems.kind,
+      total: sql<number>`coalesce(sum(${projectItems.baseAmount}), 0)`,
+    })
+    .from(projectItems)
+    .where(eq(projectItems.recurring, 1))
+    .groupBy(projectItems.projectId, projectItems.kind)
+
+  let mrr = 0
+  for (const project of activeProjects) {
+    if (project.status !== "active") continue
+    const months = CYCLE_MONTHS[project.billingCycle] ?? 0
+    if (months === 0) continue
+    const charges = Number(
+      recurring.find((r) => r.projectId === project.id && r.kind === "charge")?.total ?? 0,
+    )
+    mrr += Math.round(((project.basePrice ?? 0) + charges) / months)
+  }
 
   return {
     today,
@@ -141,17 +306,19 @@ export async function dashboardData() {
     overdueTasks,
     upcomingPayments,
     overduePayments,
+    duePayments,
+    expiringDomains,
     income: pick(curMonth, "income"),
     expense: pick(curMonth, "expense"),
     prevIncome: pick(prevMonth, "income"),
     prevExpense: pick(prevMonth, "expense"),
     activeProjects,
     pinnedNotes,
-    activeClients: activeClientCount[0]?.n ?? 0,
     openProjects: activeProjectCount[0]?.n ?? 0,
     openTasks: openTaskCount[0]?.n ?? 0,
     receivable: Number(receivables[0]?.total ?? 0),
     weekDone: weekDone[0]?.n ?? 0,
+    mrr,
   }
 }
 
@@ -162,7 +329,7 @@ export async function cashflowSeries(months = 6) {
     .select({
       month: sql<string>`substr(${transactions.date}, 1, 7)`,
       type: transactions.type,
-      total: sumAmount,
+      total: sumTx,
     })
     .from(transactions)
     .where(gte(transactions.date, start))
@@ -172,8 +339,8 @@ export async function cashflowSeries(months = 6) {
   for (let i = months - 1; i >= 0; i--) {
     const r = monthRange(-i)
     const key = r.start.slice(0, 7)
-    const income = Number(rows.find((x) => x.month === key && x.type === "income")?.total ?? 0) / 100
-    const expense = Number(rows.find((x) => x.month === key && x.type === "expense")?.total ?? 0) / 100
+    const income = Number(rows.find((x) => x.month === key && x.type === "income")?.total ?? 0)
+    const expense = Number(rows.find((x) => x.month === key && x.type === "expense")?.total ?? 0)
     out.push({
       month: key,
       label: new Date(`${key}-01T00:00:00`).toLocaleDateString("tr-TR", { month: "short" }),
@@ -188,109 +355,11 @@ export async function cashflowSeries(months = 6) {
 export async function categoryBreakdown(type: "income" | "expense", from: string, to: string) {
   await ready()
   const rows = await db
-    .select({ category: transactions.category, total: sumAmount })
+    .select({ category: transactions.category, total: sumTx })
     .from(transactions)
     .where(and(eq(transactions.type, type), gte(transactions.date, from), lte(transactions.date, to)))
     .groupBy(transactions.category)
   return rows.map((r) => ({ category: r.category, total: Number(r.total) })).sort((a, b) => b.total - a.total)
-}
-
-export async function clientsWithStats() {
-  await ready()
-  const rows = await db
-    .select({
-      client: clients,
-      projectCount: sql<number>`(select count(*) from projects p where p.client_id = ${clients.id})`,
-      activeProjects: sql<number>`(select count(*) from projects p where p.client_id = ${clients.id} and p.status = 'active')`,
-      earned: sql<number>`(select coalesce(sum(t.amount),0) from transactions t where t.client_id = ${clients.id} and t.type = 'income')`,
-      pending: sql<number>`(select coalesce(sum(pm.amount),0) from payments pm where pm.client_id = ${clients.id} and pm.status = 'pending' and pm.direction = 'incoming')`,
-    })
-    .from(clients)
-    .orderBy(asc(clients.name))
-  return rows.map((r) => ({
-    ...r.client,
-    projectCount: Number(r.projectCount),
-    activeProjects: Number(r.activeProjects),
-    earned: Number(r.earned),
-    pending: Number(r.pending),
-  }))
-}
-
-export async function clientDetail(id: string) {
-  await ready()
-  const [client] = await db.select().from(clients).where(eq(clients.id, id))
-  if (!client) return null
-  const [clientProjects, clientPayments, clientTx, clientNotes] = await Promise.all([
-    db.select().from(projects).where(eq(projects.clientId, id)).orderBy(desc(projects.updatedAt)),
-    db.select().from(payments).where(eq(payments.clientId, id)).orderBy(desc(payments.dueDate)),
-    db.select().from(transactions).where(eq(transactions.clientId, id)).orderBy(desc(transactions.date)).limit(30),
-    db.select().from(notes).where(eq(notes.clientId, id)).orderBy(desc(notes.updatedAt)).limit(10),
-  ])
-  const earned = clientTx.filter((t) => t.type === "income").reduce((a, b) => a + b.amount, 0)
-  const pending = clientPayments
-    .filter((p) => p.status === "pending" && p.direction === "incoming")
-    .reduce((a, b) => a + b.amount, 0)
-  return {
-    client,
-    projects: clientProjects,
-    payments: clientPayments,
-    transactions: clientTx,
-    notes: clientNotes,
-    earned,
-    pending,
-  }
-}
-
-export async function projectsWithClient() {
-  await ready()
-  const rows = await db
-    .select({
-      project: projects,
-      clientName: clients.name,
-      openTasks: sql<number>`(select count(*) from tasks t where t.project_id = ${projects.id} and t.status != 'done')`,
-      doneTasks: sql<number>`(select count(*) from tasks t where t.project_id = ${projects.id} and t.status = 'done')`,
-      earned: sql<number>`(select coalesce(sum(t.amount),0) from transactions t where t.project_id = ${projects.id} and t.type = 'income')`,
-    })
-    .from(projects)
-    .leftJoin(clients, eq(projects.clientId, clients.id))
-    .orderBy(desc(projects.updatedAt))
-  return rows.map((r) => ({
-    ...r.project,
-    clientName: r.clientName,
-    openTasks: Number(r.openTasks),
-    doneTasks: Number(r.doneTasks),
-    earned: Number(r.earned),
-  }))
-}
-
-export async function projectDetail(id: string) {
-  await ready()
-  const [row] = await db
-    .select({ project: projects, clientName: clients.name })
-    .from(projects)
-    .leftJoin(clients, eq(projects.clientId, clients.id))
-    .where(eq(projects.id, id))
-  if (!row) return null
-  const [projectTasks, projectPayments, projectTx, projectNotes] = await Promise.all([
-    db.select().from(tasks).where(eq(tasks.projectId, id)).orderBy(asc(tasks.status), asc(tasks.dueDate)),
-    db.select().from(payments).where(eq(payments.projectId, id)).orderBy(asc(payments.dueDate)),
-    db.select().from(transactions).where(eq(transactions.projectId, id)).orderBy(desc(transactions.date)),
-    db.select().from(notes).where(eq(notes.projectId, id)).orderBy(desc(notes.updatedAt)),
-  ])
-  const earned = projectTx.filter((t) => t.type === "income").reduce((a, b) => a + b.amount, 0)
-  const spent = projectTx.filter((t) => t.type === "expense").reduce((a, b) => a + b.amount, 0)
-  const pending = projectPayments.filter((p) => p.status === "pending").reduce((a, b) => a + b.amount, 0)
-  return {
-    project: row.project,
-    clientName: row.clientName,
-    tasks: projectTasks,
-    payments: projectPayments,
-    transactions: projectTx,
-    notes: projectNotes,
-    earned,
-    spent,
-    pending,
-  }
 }
 
 export async function tasksBoard() {
@@ -306,27 +375,25 @@ export async function tasksBoard() {
 export async function notesList() {
   await ready()
   const rows = await db
-    .select({ note: notes, projectName: projects.name, clientName: clients.name })
+    .select({ note: notes, projectName: projects.name })
     .from(notes)
     .leftJoin(projects, eq(notes.projectId, projects.id))
-    .leftJoin(clients, eq(notes.clientId, clients.id))
     .orderBy(desc(notes.pinned), desc(notes.updatedAt))
-  return rows.map((r) => ({ ...r.note, projectName: r.projectName, clientName: r.clientName }))
+  return rows.map((r) => ({ ...r.note, projectName: r.projectName }))
 }
 
 export async function paymentsList() {
   await ready()
   const today = todayISO()
   const rows = await db
-    .select({ payment: payments, clientName: clients.name, projectName: projects.name })
+    .select({ payment: payments, projectName: projects.name, clientName: projects.clientName })
     .from(payments)
-    .leftJoin(clients, eq(payments.clientId, clients.id))
     .leftJoin(projects, eq(payments.projectId, projects.id))
     .orderBy(asc(payments.dueDate))
   return rows.map((r) => ({
     ...r.payment,
-    clientName: r.clientName,
     projectName: r.projectName,
+    clientName: r.clientName,
     isOverdue: r.payment.status === "pending" && r.payment.dueDate < today,
   }))
 }
@@ -339,20 +406,19 @@ export async function transactionsList(opts?: { from?: string; to?: string; type
     opts?.type && opts.type !== "all" ? eq(transactions.type, opts.type) : undefined,
   ].filter(Boolean)
   const rows = await db
-    .select({ tx: transactions, clientName: clients.name, projectName: projects.name })
+    .select({ tx: transactions, projectName: projects.name })
     .from(transactions)
-    .leftJoin(clients, eq(transactions.clientId, clients.id))
     .leftJoin(projects, eq(transactions.projectId, projects.id))
     .where(where.length ? and(...where) : undefined)
     .orderBy(desc(transactions.date), desc(transactions.createdAt))
     .limit(300)
-  return rows.map((r) => ({ ...r.tx, clientName: r.clientName, projectName: r.projectName }))
+  return rows.map((r) => ({ ...r.tx, projectName: r.projectName }))
 }
 
 export async function financeSummary(from: string, to: string) {
   await ready()
   const rows = await db
-    .select({ type: transactions.type, total: sumAmount, n: count() })
+    .select({ type: transactions.type, total: sumTx, n: count() })
     .from(transactions)
     .where(and(gte(transactions.date, from), lte(transactions.date, to)))
     .groupBy(transactions.type)
@@ -363,18 +429,18 @@ export async function financeSummary(from: string, to: string) {
 
 export async function dataCounts() {
   await ready()
-  const [c] = await db.select({ n: count() }).from(clients)
   const [p] = await db.select({ n: count() }).from(projects)
   const [t] = await db.select({ n: count() }).from(tasks)
   const [n] = await db.select({ n: count() }).from(notes)
   const [pm] = await db.select({ n: count() }).from(payments)
   const [tx] = await db.select({ n: count() }).from(transactions)
+  const [d] = await db.select({ n: count() }).from(projectDomains)
   return {
-    clients: c?.n ?? 0,
     projects: p?.n ?? 0,
     tasks: t?.n ?? 0,
     notes: n?.n ?? 0,
     payments: pm?.n ?? 0,
     transactions: tx?.n ?? 0,
+    domains: d?.n ?? 0,
   }
 }

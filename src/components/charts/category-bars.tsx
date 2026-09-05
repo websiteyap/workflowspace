@@ -1,15 +1,17 @@
 import { ALL_CATEGORIES, label as labelOf } from "@/lib/constants"
-import { money } from "@/lib/format"
+import { type RateMap, formatBase } from "@/lib/format"
 
 export function CategoryBars({
   data,
   variant = "income",
-  currency = "TRY",
+  display,
+  rates,
   emptyText = "Kayıt yok",
 }: {
   data: { category: string; total: number }[]
   variant?: "income" | "expense"
-  currency?: string
+  display: string
+  rates: RateMap
   emptyText?: string
 }) {
   if (data.length === 0) {
@@ -33,7 +35,7 @@ export function CategoryBars({
             <div className="flex items-baseline justify-between gap-3 text-sm">
               <span className="truncate">{labelOf(ALL_CATEGORIES, d.category)}</span>
               <span className="shrink-0 tabular font-medium">
-                {money(d.total, currency)}
+                {formatBase(d.total, display, rates)}
                 <span className="ml-1.5 text-xs font-normal text-muted-foreground">%{pct}</span>
               </span>
             </div>

@@ -36,7 +36,7 @@ import type { Payment } from "@/db/schema"
 import { useNewParam } from "@/hooks/use-new-param"
 import { deletePayment, markPaymentPaid, unmarkPayment } from "@/lib/actions/finance"
 import { PAYMENT_STATUS } from "@/lib/constants"
-import { formatDate, money, monthRange, relativeDay } from "@/lib/format"
+import { type RateMap, formatBase, formatDate, money, monthRange, relativeDay } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 export type PaymentRow = Payment & {
@@ -52,7 +52,7 @@ const FILTERS = [
   { value: "all", label: "Tümü" },
 ]
 
-function RowActions({ payment, clients, projects }: { payment: PaymentRow; clients: Lookup[]; projects: Lookup[] }) {
+function RowActions({ payment, projects }: { payment: PaymentRow; projects: Lookup[] }) {
   const [edit, setEdit] = React.useState(false)
   const [del, setDel] = React.useState(false)
   const [, start] = React.useTransition()
@@ -83,7 +83,7 @@ function RowActions({ payment, clients, projects }: { payment: PaymentRow; clien
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <PaymentDialog payment={payment} clients={clients} projects={projects} open={edit} onOpenChange={setEdit} />
+      <PaymentDialog payment={payment} projects={projects} open={edit} onOpenChange={setEdit} />
       <ConfirmDialog
         open={del}
         onOpenChange={setDel}
@@ -97,12 +97,14 @@ function RowActions({ payment, clients, projects }: { payment: PaymentRow; clien
 
 export function PaymentsClient({
   payments,
-  clients,
   projects,
+  display,
+  rates,
 }: {
   payments: PaymentRow[]
-  clients: Lookup[]
   projects: Lookup[]
+  display: string
+  rates: RateMap
 }) {
   const [newOpen, setNewOpen] = useNewParam("payment")
   const [q, setQ] = React.useState("")
@@ -110,16 +112,17 @@ export function PaymentsClient({
   const [, start] = React.useTransition()
 
   const month = monthRange(0)
+  const fmt = (v: number) => formatBase(v, display, rates)
   const pendingIn = payments
     .filter((p) => p.status === "pending" && p.direction === "incoming")
-    .reduce((a, p) => a + p.amount, 0)
+    .reduce((a, p) => a + p.baseAmount, 0)
   const overdue = payments.filter((p) => p.isOverdue)
   const pendingOut = payments
     .filter((p) => p.status === "pending" && p.direction === "outgoing")
-    .reduce((a, p) => a + p.amount, 0)
+    .reduce((a, p) => a + p.baseAmount, 0)
   const collectedThisMonth = payments
     .filter((p) => p.status === "paid" && p.direction === "incoming" && (p.paidDate ?? "") >= month.start && (p.paidDate ?? "") <= month.end)
-    .reduce((a, p) => a + p.amount, 0)
+    .reduce((a, p) => a + p.baseAmount, 0)
 
   const filtered = payments.filter((p) => {
     if (filter === "open" && p.status !== "pending") return false
@@ -137,7 +140,6 @@ export function PaymentsClient({
         description="Tahsilat planı, vade takibi ve ödenecekler"
         actions={
           <PaymentDialog
-            clients={clients}
             projects={projects}
             open={newOpen}
             onOpenChange={setNewOpen}
@@ -151,16 +153,16 @@ export function PaymentsClient({
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Bekleyen tahsilat" value={money(pendingIn)} icon={ArrowDownLeft} hint="tahsil edilecek" />
+        <StatCard label="Bekleyen tahsilat" value={fmt(pendingIn)} icon={ArrowDownLeft} hint="tahsil edilecek" />
         <StatCard
           label="Gecikmiş"
-          value={money(overdue.reduce((a, p) => a + p.amount, 0))}
+          value={fmt(overdue.reduce((a, p) => a + p.baseAmount, 0))}
           icon={AlertTriangle}
           accent={overdue.length ? "negative" : undefined}
           hint={`${overdue.length} kayıt`}
         />
-        <StatCard label={`Tahsil edilen · ${month.label}`} value={money(collectedThisMonth)} icon={Check} accent="positive" />
-        <StatCard label="Ödenecek" value={money(pendingOut)} icon={ArrowUpRight} hint="giden ödemeler" />
+        <StatCard label={`Tahsil edilen · ${month.label}`} value={fmt(collectedThisMonth)} icon={Check} accent="positive" />
+        <StatCard label="Ödenecek" value={fmt(pendingOut)} icon={ArrowUpRight} hint="giden ödemeler" />
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -234,14 +236,14 @@ export function PaymentsClient({
                     </div>
                   </TableCell>
                   <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
-                    {p.clientId ? (
-                      <Link href={`/musteriler/${p.clientId}`} className="hover:text-foreground hover:underline">
-                        {p.clientName}
+                    {p.projectId ? (
+                      <Link href={`/projeler/${p.projectId}`} className="hover:text-foreground hover:underline">
+                        {p.projectName}
                       </Link>
                     ) : (
                       <span>—</span>
                     )}
-                    {p.projectName && <span className="block truncate text-xs">{p.projectName}</span>}
+                    {p.clientName && <span className="block truncate text-xs">{p.clientName}</span>}
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-sm">
                     <span className="tabular">{formatDate(p.dueDate)}</span>
@@ -252,7 +254,12 @@ export function PaymentsClient({
                     )}
                   </TableCell>
                   <TableCell className="text-right tabular font-medium whitespace-nowrap">
-                    {money(p.amount, p.currency)}
+                    {fmt(p.baseAmount)}
+                    {p.currency !== display && (
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        {money(p.amount, p.currency)}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <StatusBadge options={PAYMENT_STATUS} value={p.isOverdue ? "overdue" : p.status} />
@@ -269,7 +276,7 @@ export function PaymentsClient({
                           <Check className="size-3.5" /> Ödendi
                         </Button>
                       )}
-                      <RowActions payment={p} clients={clients} projects={projects} />
+                      <RowActions payment={p} projects={projects} />
                     </div>
                   </TableCell>
                 </TableRow>

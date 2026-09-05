@@ -10,21 +10,17 @@ import type { Lookup } from "./project-dialog"
 
 export function PaymentDialog({
   payment,
-  clients,
   projects,
   trigger,
   open,
   onOpenChange,
-  defaultClientId,
   defaultProjectId,
 }: {
   payment?: Payment
-  clients: Lookup[]
   projects: Lookup[]
   trigger?: React.ReactNode
   open?: boolean
   onOpenChange?: (o: boolean) => void
-  defaultClientId?: string
   defaultProjectId?: string
 }) {
   return (
@@ -46,7 +42,6 @@ export function PaymentDialog({
         <SelectField name="currency" label="Para birimi" options={CURRENCIES.map((c) => ({ value: c, label: c }))} defaultValue={payment?.currency ?? "TRY"} />
         <DateField name="dueDate" label="Vade tarihi" required defaultValue={payment?.dueDate ?? todayISO()} />
         <DateField name="issueDate" label="Fatura tarihi" defaultValue={payment?.issueDate} />
-        <SelectField name="clientId" label="Müşteri" options={clients} defaultValue={payment?.clientId ?? defaultClientId ?? "none"} allowEmpty emptyLabel="Yok" />
         <SelectField name="projectId" label="Proje" options={projects} defaultValue={payment?.projectId ?? defaultProjectId ?? "none"} allowEmpty emptyLabel="Yok" />
         <SelectField name="recurrence" label="Tekrar" options={RECURRENCE} defaultValue={payment?.recurrence ?? "none"} hint="Ödendi işaretlendiğinde bir sonraki dönem otomatik açılır." />
         <SelectField name="method" label="Ödeme yöntemi" options={PAYMENT_METHODS} defaultValue={payment?.method ?? "none"} allowEmpty emptyLabel="Belirtilmedi" />

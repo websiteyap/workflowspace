@@ -20,12 +20,12 @@ import type { Transaction } from "@/db/schema"
 import { useNewParam } from "@/hooks/use-new-param"
 import { deleteTransaction } from "@/lib/actions/finance"
 import { ALL_CATEGORIES, label as labelOf } from "@/lib/constants"
-import { formatDate, money } from "@/lib/format"
+import { type RateMap, formatBase, formatDate, money } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
-export type TxRow = Transaction & { clientName: string | null; projectName: string | null }
+export type TxRow = Transaction & { projectName: string | null }
 
-function RowActions({ tx, clients, projects }: { tx: TxRow; clients: Lookup[]; projects: Lookup[] }) {
+function RowActions({ tx, projects }: { tx: TxRow; projects: Lookup[] }) {
   const [edit, setEdit] = React.useState(false)
   const [del, setDel] = React.useState(false)
   return (
@@ -45,7 +45,7 @@ function RowActions({ tx, clients, projects }: { tx: TxRow; clients: Lookup[]; p
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <TransactionDialog transaction={tx} clients={clients} projects={projects} open={edit} onOpenChange={setEdit} />
+      <TransactionDialog transaction={tx} projects={projects} open={edit} onOpenChange={setEdit} />
       <ConfirmDialog
         open={del}
         onOpenChange={setDel}
@@ -57,17 +57,10 @@ function RowActions({ tx, clients, projects }: { tx: TxRow; clients: Lookup[]; p
   )
 }
 
-export function NewTransactionButton({
-  clients,
-  projects,
-}: {
-  clients: Lookup[]
-  projects: Lookup[]
-}) {
+export function NewTransactionButton({ projects }: { projects: Lookup[] }) {
   const [open, setOpen] = useNewParam("transaction")
   return (
     <TransactionDialog
-      clients={clients}
       projects={projects}
       open={open}
       onOpenChange={setOpen}
@@ -82,12 +75,14 @@ export function NewTransactionButton({
 
 export function TransactionsTable({
   transactions,
-  clients,
   projects,
+  display,
+  rates,
 }: {
   transactions: TxRow[]
-  clients: Lookup[]
   projects: Lookup[]
+  display: string
+  rates: RateMap
 }) {
   const [q, setQ] = React.useState("")
   const [type, setType] = React.useState("all")
@@ -96,7 +91,7 @@ export function TransactionsTable({
     if (type !== "all" && t.type !== type) return false
     if (
       q &&
-      !`${t.description ?? ""} ${t.clientName ?? ""} ${t.projectName ?? ""} ${labelOf(ALL_CATEGORIES, t.category)}`
+      !`${t.description ?? ""} ${t.projectName ?? ""} ${labelOf(ALL_CATEGORIES, t.category)}`
         .toLowerCase()
         .includes(q.toLowerCase())
     )
@@ -183,7 +178,6 @@ export function TransactionsTable({
                   </TableCell>
                   <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
                     <span className="block truncate">{t.projectName ?? "—"}</span>
-                    <span className="block truncate">{t.clientName ?? ""}</span>
                   </TableCell>
                   <TableCell
                     className={cn(
@@ -192,10 +186,15 @@ export function TransactionsTable({
                     )}
                   >
                     {t.type === "income" ? "+" : "−"}
-                    {money(t.amount, t.currency)}
+                    {formatBase(t.baseAmount, display, rates)}
+                    {t.currency !== display && (
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        {money(t.amount, t.currency)}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell>
-                    <RowActions tx={t} clients={clients} projects={projects} />
+                    <RowActions tx={t} projects={projects} />
                   </TableCell>
                 </TableRow>
               ))}

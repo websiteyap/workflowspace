@@ -1,18 +1,41 @@
 export type Option = { value: string; label: string; tone: Tone }
 export type Tone = "neutral" | "blue" | "green" | "amber" | "red" | "violet"
 
-export const CLIENT_STATUS: Option[] = [
-  { value: "lead", label: "Potansiyel", tone: "violet" },
+export const PROJECT_STATUS: Option[] = [
+  { value: "lead", label: "Teklif", tone: "violet" },
   { value: "active", label: "Aktif", tone: "green" },
-  { value: "passive", label: "Pasif", tone: "neutral" },
+  { value: "paused", label: "Beklemede", tone: "amber" },
+  { value: "completed", label: "Tamamlandı", tone: "blue" },
+  { value: "cancelled", label: "İptal", tone: "red" },
 ]
 
-export const PROJECT_STATUS: Option[] = [
-  { value: "planned", label: "Planlandı", tone: "violet" },
-  { value: "active", label: "Devam ediyor", tone: "blue" },
-  { value: "paused", label: "Beklemede", tone: "amber" },
-  { value: "completed", label: "Tamamlandı", tone: "green" },
-  { value: "cancelled", label: "İptal", tone: "red" },
+export const BILLING_CYCLE: Option[] = [
+  { value: "none", label: "Tek seferlik", tone: "neutral" },
+  { value: "monthly", label: "Aylık", tone: "green" },
+  { value: "quarterly", label: "3 aylık", tone: "blue" },
+  { value: "biannual", label: "6 aylık", tone: "violet" },
+  { value: "yearly", label: "Yıllık", tone: "amber" },
+]
+
+export const CYCLE_MONTHS: Record<string, number> = {
+  none: 0,
+  monthly: 1,
+  quarterly: 3,
+  biannual: 6,
+  yearly: 12,
+}
+
+export const ITEM_KIND: Option[] = [
+  { value: "charge", label: "Müşteriye ek ücret", tone: "green" },
+  { value: "cost", label: "Benim giderim", tone: "red" },
+]
+
+export const REMINDER_DAYS: Option[] = [
+  { value: "0", label: "Hatırlatma yok", tone: "neutral" },
+  { value: "1", label: "1 gün önce", tone: "blue" },
+  { value: "3", label: "3 gün önce", tone: "blue" },
+  { value: "7", label: "1 hafta önce", tone: "amber" },
+  { value: "14", label: "2 hafta önce", tone: "violet" },
 ]
 
 export const PRIORITY: Option[] = [
@@ -38,12 +61,6 @@ export const PAYMENT_STATUS: Option[] = [
 export const PAYMENT_DIRECTION: Option[] = [
   { value: "incoming", label: "Tahsilat", tone: "green" },
   { value: "outgoing", label: "Ödeme", tone: "red" },
-]
-
-export const BILLING_TYPE: Option[] = [
-  { value: "fixed", label: "Sabit fiyat", tone: "neutral" },
-  { value: "hourly", label: "Saatlik", tone: "blue" },
-  { value: "retainer", label: "Aylık abonelik", tone: "violet" },
 ]
 
 export const RECURRENCE: Option[] = [

@@ -1,5 +1,36 @@
 export const CURRENCIES = ["TRY", "USD", "EUR", "GBP"] as const
 export type Currency = (typeof CURRENCIES)[number]
+export const BASE_CURRENCY = "TRY"
+
+export type RateMap = Record<string, number>
+
+export const CURRENCY_SYMBOL: Record<string, string> = {
+  TRY: "₺",
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+}
+
+export function rateFor(currency: string, rates: RateMap) {
+  return rates[currency] ?? 1
+}
+
+export function toBase(amountMinor: number, currency: string, rates: RateMap) {
+  return Math.round(amountMinor * rateFor(currency, rates))
+}
+
+export function fromBase(baseMinor: number, currency: string, rates: RateMap) {
+  return Math.round(baseMinor / rateFor(currency, rates))
+}
+
+export function formatBase(
+  baseMinor: number | null | undefined,
+  display: string,
+  rates: RateMap,
+  opts?: { compact?: boolean },
+) {
+  return money(fromBase(baseMinor ?? 0, display, rates), display, opts)
+}
 
 export function money(minor: number | null | undefined, currency = "TRY", opts?: { compact?: boolean }) {
   const value = (minor ?? 0) / 100

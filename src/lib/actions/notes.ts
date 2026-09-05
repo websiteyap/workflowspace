@@ -14,7 +14,6 @@ export async function saveNote(_prev: ActionState, fd: FormData): Promise<Action
       content: str(fd, "content") ?? "",
       tags: str(fd, "tags"),
       projectId: ref(fd, "projectId"),
-      clientId: ref(fd, "clientId"),
       pinned: bool(fd, "pinned"),
       updatedAt: nowISO(),
     }

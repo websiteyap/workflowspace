@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { db, ready } from "@/db"
 import { payments, transactions } from "@/db/schema"
 import { addMonths, toMinor, todayISO } from "@/lib/format"
+import { convertToBase } from "@/lib/fx"
 import { type ActionState, newId, nowISO, reqStr, ref, run, str } from "./helpers"
 
 const TOUCH = ["/", "/finans", "/odemeler", "/projeler"]
@@ -15,14 +16,18 @@ export async function saveTransaction(_prev: ActionState, fd: FormData): Promise
     const id = str(fd, "id")
     const amount = toMinor(str(fd, "amount"))
     if (amount <= 0) return { error: "Tutar sıfırdan büyük olmalı." }
+    const currency = str(fd, "currency") ?? "TRY"
+    const date = str(fd, "date") ?? todayISO()
+    const converted = await convertToBase(amount, currency, date)
     const data = {
       type: str(fd, "type") ?? "income",
       amount,
-      currency: str(fd, "currency") ?? "TRY",
+      currency,
+      baseAmount: converted.baseAmount,
+      fxRate: converted.fxRate,
       category: str(fd, "category") ?? "other",
       description: str(fd, "description"),
-      date: str(fd, "date") ?? todayISO(),
-      clientId: ref(fd, "clientId"),
+      date,
       projectId: ref(fd, "projectId"),
       method: str(fd, "method"),
     }
@@ -45,16 +50,20 @@ export async function savePayment(_prev: ActionState, fd: FormData): Promise<Act
     const amount = toMinor(str(fd, "amount"))
     if (amount <= 0) return { error: "Tutar sıfırdan büyük olmalı." }
     const status = str(fd, "status") ?? "pending"
+    const currency = str(fd, "currency") ?? "TRY"
+    const dueDate = str(fd, "dueDate") ?? todayISO()
+    const converted = await convertToBase(amount, currency, dueDate)
     const data = {
-      clientId: ref(fd, "clientId"),
       projectId: ref(fd, "projectId"),
       title: reqStr(fd, "title", "Başlık"),
       direction: str(fd, "direction") ?? "incoming",
       amount,
-      currency: str(fd, "currency") ?? "TRY",
+      currency,
+      baseAmount: converted.baseAmount,
+      fxRate: converted.fxRate,
       status,
       issueDate: str(fd, "issueDate"),
-      dueDate: str(fd, "dueDate") ?? todayISO(),
+      dueDate,
       paidDate: status === "paid" ? (str(fd, "paidDate") ?? todayISO()) : null,
       invoiceNo: str(fd, "invoiceNo"),
       method: str(fd, "method"),
@@ -93,10 +102,11 @@ export async function markPaymentPaid(id: string, paidDate?: string) {
       type: row.direction === "incoming" ? "income" : "expense",
       amount: row.amount,
       currency: row.currency,
+      baseAmount: row.baseAmount,
+      fxRate: row.fxRate,
       category: row.direction === "incoming" ? "project" : "other_expense",
       description: row.title,
       date,
-      clientId: row.clientId,
       projectId: row.projectId,
       paymentId: row.id,
       method: row.method,
@@ -108,12 +118,13 @@ export async function markPaymentPaid(id: string, paidDate?: string) {
     const step = row.recurrence === "monthly" ? 1 : row.recurrence === "quarterly" ? 3 : 12
     await db.insert(payments).values({
       id: newId(),
-      clientId: row.clientId,
       projectId: row.projectId,
       title: row.title,
       direction: row.direction,
       amount: row.amount,
       currency: row.currency,
+      baseAmount: row.baseAmount,
+      fxRate: row.fxRate,
       status: "pending",
       dueDate: addMonths(row.dueDate, step),
       invoiceNo: null,

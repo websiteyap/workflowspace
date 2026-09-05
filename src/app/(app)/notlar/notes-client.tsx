@@ -22,7 +22,7 @@ import { deleteNote, togglePin } from "@/lib/actions/notes"
 import { formatDateTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
-export type NoteRow = Note & { projectName: string | null; clientName: string | null }
+export type NoteRow = Note & { projectName: string | null }
 
 function tagsOf(note: Note) {
   return (note.tags ?? "")
@@ -31,7 +31,7 @@ function tagsOf(note: Note) {
     .filter(Boolean)
 }
 
-function NoteCard({ note, projects, clients }: { note: NoteRow; projects: Lookup[]; clients: Lookup[] }) {
+function NoteCard({ note, projects }: { note: NoteRow; projects: Lookup[] }) {
   const [edit, setEdit] = React.useState(false)
   const [del, setDel] = React.useState(false)
   const [, start] = React.useTransition()
@@ -89,11 +89,11 @@ function NoteCard({ note, projects, clients }: { note: NoteRow; projects: Lookup
       )}
 
       <div className="mt-3 flex items-center justify-between border-t pt-2.5 text-[11px] text-muted-foreground">
-        <span className="truncate">{note.projectName ?? note.clientName ?? "Genel"}</span>
+        <span className="truncate">{note.projectName ?? "Genel"}</span>
         <span className="shrink-0">{formatDateTime(note.updatedAt)}</span>
       </div>
 
-      <NoteDialog note={note} projects={projects} clients={clients} open={edit} onOpenChange={setEdit} />
+      <NoteDialog note={note} projects={projects} open={edit} onOpenChange={setEdit} />
       <ConfirmDialog
         open={del}
         onOpenChange={setDel}
@@ -105,15 +105,7 @@ function NoteCard({ note, projects, clients }: { note: NoteRow; projects: Lookup
   )
 }
 
-export function NotesClient({
-  notes,
-  projects,
-  clients,
-}: {
-  notes: NoteRow[]
-  projects: Lookup[]
-  clients: Lookup[]
-}) {
+export function NotesClient({ notes, projects }: { notes: NoteRow[]; projects: Lookup[] }) {
   const [newOpen, setNewOpen] = useNewParam("note")
   const [q, setQ] = React.useState("")
   const [tag, setTag] = React.useState<string | null>(null)
@@ -138,7 +130,6 @@ export function NotesClient({
         actions={
           <NoteDialog
             projects={projects}
-            clients={clients}
             open={newOpen}
             onOpenChange={setNewOpen}
             trigger={
@@ -199,7 +190,7 @@ export function NotesClient({
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((n) => (
-            <NoteCard key={n.id} note={n} projects={projects} clients={clients} />
+            <NoteCard key={n.id} note={n} projects={projects} />
           ))}
         </div>
       )}

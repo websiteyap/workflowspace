@@ -13,21 +13,30 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { NotificationBell } from "@/components/reminders/notification-settings"
+import type { RateMap } from "@/lib/format"
 import { FLAT_NAV } from "@/lib/nav"
+import { CurrencySwitch } from "./currency-switch"
 import { CommandPalette, type SearchEntry } from "./command-palette"
 import { Logo, SidebarNav } from "./sidebar"
 import { ThemeToggle } from "./theme-toggle"
 
 const QUICK = [
+  { label: "İş / Proje", href: "/projeler?new=project" },
   { label: "Görev", href: "/gorevler?new=task" },
-  { label: "Müşteri", href: "/musteriler?new=client" },
-  { label: "Proje", href: "/projeler?new=project" },
   { label: "Not", href: "/notlar?new=note" },
   { label: "Ödeme", href: "/odemeler?new=payment" },
   { label: "Gelir / Gider", href: "/finans?new=transaction" },
 ]
 
-export function Topbar({ entries }: { entries: SearchEntry[] }) {
+export function Topbar({
+  entries,
+  display,
+  rates,
+}: {
+  entries: SearchEntry[]
+  display: string
+  rates: RateMap
+}) {
   const pathname = usePathname()
   const [open, setOpen] = React.useState(false)
   const [menu, setMenu] = React.useState(false)
@@ -65,6 +74,7 @@ export function Topbar({ entries }: { entries: SearchEntry[] }) {
       </nav>
 
       <div className="ml-auto flex items-center gap-2">
+        <CurrencySwitch display={display} rates={rates} />
         <NotificationBell />
         <button
           type="button"

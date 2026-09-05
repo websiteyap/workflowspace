@@ -17,17 +17,29 @@ const SERIES = [
   { key: "expense", name: "Gider", color: "var(--viz-2)" },
 ] as const
 
-function fmt(v: number) {
-  return new Intl.NumberFormat("tr-TR", {
-    style: "currency",
-    currency: "TRY",
-    maximumFractionDigits: 0,
-    notation: Math.abs(v) >= 100_000 ? "compact" : "standard",
-  }).format(v)
+function makeFormatter(currency: string) {
+  return (v: number) =>
+    new Intl.NumberFormat("tr-TR", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0,
+      notation: Math.abs(v) >= 100_000 ? "compact" : "standard",
+    }).format(v)
 }
 
-function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: { dataKey: string; value: number }[]; label?: string }) {
+function ChartTooltip({
+  active,
+  payload,
+  label,
+  currency = "TRY",
+}: {
+  active?: boolean
+  payload?: { dataKey: string; value: number }[]
+  label?: string
+  currency?: string
+}) {
   if (!active || !payload?.length) return null
+  const fmt = makeFormatter(currency)
   const income = payload.find((p) => p.dataKey === "income")?.value ?? 0
   const expense = payload.find((p) => p.dataKey === "expense")?.value ?? 0
   return (
@@ -52,7 +64,7 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
   )
 }
 
-export function CashflowChart({ data }: { data: CashflowPoint[] }) {
+export function CashflowChart({ data, currency = "TRY" }: { data: CashflowPoint[]; currency?: string }) {
   const empty = data.every((d) => d.income === 0 && d.expense === 0)
 
   return (
@@ -90,7 +102,7 @@ export function CashflowChart({ data }: { data: CashflowPoint[] }) {
                   new Intl.NumberFormat("tr-TR", { notation: "compact", maximumFractionDigits: 1 }).format(v)
                 }
               />
-              <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--viz-grid)", opacity: 0.4 }} />
+              <Tooltip content={<ChartTooltip currency={currency} />} cursor={{ fill: "var(--viz-grid)", opacity: 0.4 }} />
               {SERIES.map((s) => (
                 <Bar key={s.key} dataKey={s.key} name={s.name} fill={s.color} radius={[4, 4, 0, 0]} maxBarSize={34} />
               ))}

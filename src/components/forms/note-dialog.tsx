@@ -9,14 +9,12 @@ import type { Lookup } from "./project-dialog"
 export function NoteDialog({
   note,
   projects,
-  clients,
   trigger,
   open,
   onOpenChange,
 }: {
   note?: Note
   projects: Lookup[]
-  clients: Lookup[]
   trigger?: React.ReactNode
   open?: boolean
   onOpenChange?: (o: boolean) => void
@@ -44,7 +42,6 @@ export function NoteDialog({
         />
         <FormGrid>
           <SelectField name="projectId" label="Proje" options={projects} defaultValue={note?.projectId ?? "none"} allowEmpty emptyLabel="Yok" />
-          <SelectField name="clientId" label="Müşteri" options={clients} defaultValue={note?.clientId ?? "none"} allowEmpty emptyLabel="Yok" />
           <TextField name="tags" label="Etiketler" defaultValue={note?.tags ?? ""} placeholder="fikir, sql, toplantı" full />
         </FormGrid>
         <label className="flex items-center gap-2 text-sm">

@@ -99,11 +99,8 @@ export function CommandPalette({
           <CommandItem value="yeni gorev ekle" onSelect={() => go("/gorevler?new=task")}>
             <Plus className="size-4 text-muted-foreground" /> Yeni görev
           </CommandItem>
-          <CommandItem value="yeni musteri ekle" onSelect={() => go("/musteriler?new=client")}>
-            <Plus className="size-4 text-muted-foreground" /> Yeni müşteri
-          </CommandItem>
           <CommandItem value="yeni proje ekle" onSelect={() => go("/projeler?new=project")}>
-            <Plus className="size-4 text-muted-foreground" /> Yeni proje
+            <Plus className="size-4 text-muted-foreground" /> Yeni iş / proje
           </CommandItem>
           <CommandItem value="yeni odeme ekle" onSelect={() => go("/odemeler?new=payment")}>
             <Plus className="size-4 text-muted-foreground" /> Yeni ödeme

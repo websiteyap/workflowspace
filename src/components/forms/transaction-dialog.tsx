@@ -11,7 +11,6 @@ import type { Lookup } from "./project-dialog"
 
 export function TransactionDialog({
   transaction,
-  clients,
   projects,
   trigger,
   open,
@@ -19,7 +18,6 @@ export function TransactionDialog({
   defaultType = "income",
 }: {
   transaction?: Transaction
-  clients: Lookup[]
   projects: Lookup[]
   trigger?: React.ReactNode
   open?: boolean
@@ -63,7 +61,6 @@ export function TransactionDialog({
         <SelectField name="currency" label="Para birimi" options={CURRENCIES.map((c) => ({ value: c, label: c }))} defaultValue={transaction?.currency ?? "TRY"} />
         <DateField name="date" label="Tarih" required defaultValue={transaction?.date ?? todayISO()} />
         <SelectField name="method" label="Yöntem" options={PAYMENT_METHODS} defaultValue={transaction?.method ?? "none"} allowEmpty emptyLabel="Belirtilmedi" />
-        <SelectField name="clientId" label="Müşteri" options={clients} defaultValue={transaction?.clientId ?? "none"} allowEmpty emptyLabel="Yok" />
         <SelectField name="projectId" label="Proje" options={projects} defaultValue={transaction?.projectId ?? "none"} allowEmpty emptyLabel="Yok" />
         <AreaField name="description" label="Açıklama" rows={2} defaultValue={transaction?.description ?? ""} placeholder="Vercel Pro aboneliği" />
       </FormGrid>
