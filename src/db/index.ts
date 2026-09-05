@@ -6,7 +6,7 @@ import { type LibSQLDatabase, drizzle } from "drizzle-orm/libsql"
 import * as schema from "./schema"
 
 const url = process.env.DATABASE_URL ?? "file:./data/source.db"
-const SCHEMA_VERSION = "4"
+const SCHEMA_VERSION = "5"
 
 const globalForDb = globalThis as unknown as {
   __sourceDbClient?: Client
@@ -226,6 +226,62 @@ const DDL = [
   )`,
   `CREATE INDEX IF NOT EXISTS contrib_goal_idx ON goal_contributions(goal_id)`,
   `CREATE INDEX IF NOT EXISTS contrib_tx_idx ON goal_contributions(transaction_id)`,
+  `CREATE TABLE IF NOT EXISTS wallets (
+    id TEXT PRIMARY KEY,
+    label TEXT NOT NULL,
+    chain TEXT NOT NULL DEFAULT 'ethereum',
+    address TEXT NOT NULL,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS holdings (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL DEFAULT 'crypto',
+    coin_id TEXT,
+    symbol TEXT NOT NULL,
+    name TEXT,
+    amount TEXT NOT NULL DEFAULT '0',
+    cost_basis INTEGER,
+    currency TEXT NOT NULL DEFAULT 'TRY',
+    base_cost INTEGER,
+    manual_price INTEGER,
+    wallet_id TEXT REFERENCES wallets(id) ON DELETE SET NULL,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS holdings_kind_idx ON holdings(kind)`,
+  `CREATE TABLE IF NOT EXISTS price_cache (
+    coin_id TEXT PRIMARY KEY,
+    symbol TEXT NOT NULL,
+    price_usd TEXT NOT NULL,
+    price_try TEXT NOT NULL,
+    change_24h TEXT,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS alert_rules (
+    id TEXT PRIMARY KEY,
+    coin_id TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    threshold TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    note TEXT,
+    last_fired_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS alert_rules_enabled_idx ON alert_rules(enabled)`,
+  `CREATE TABLE IF NOT EXISTS alert_events (
+    id TEXT PRIMARY KEY,
+    rule_id TEXT REFERENCES alert_rules(id) ON DELETE CASCADE,
+    symbol TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT,
+    level TEXT NOT NULL DEFAULT 'info',
+    read_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS alert_events_read_idx ON alert_events(read_at)`,
   `CREATE TABLE IF NOT EXISTS fx_rates (
     date TEXT PRIMARY KEY,
     base TEXT NOT NULL,

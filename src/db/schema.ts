@@ -216,6 +216,76 @@ export const goalContributions = sqliteTable(
   (t) => [index("contrib_goal_idx").on(t.goalId), index("contrib_tx_idx").on(t.transactionId)],
 )
 
+export const wallets = sqliteTable("wallets", {
+  id: text("id").primaryKey(),
+  label: text("label").notNull(),
+  chain: text("chain").notNull().default("ethereum"),
+  address: text("address").notNull(),
+  notes: text("notes"),
+  createdAt: text("created_at").notNull().default(now),
+})
+
+export const holdings = sqliteTable(
+  "holdings",
+  {
+    id: text("id").primaryKey(),
+    kind: text("kind").notNull().default("crypto"),
+    coinId: text("coin_id"),
+    symbol: text("symbol").notNull(),
+    name: text("name"),
+    amount: text("amount").notNull().default("0"),
+    costBasis: integer("cost_basis"),
+    currency: text("currency").notNull().default("TRY"),
+    baseCost: integer("base_cost"),
+    manualPrice: integer("manual_price"),
+    walletId: text("wallet_id").references(() => wallets.id, { onDelete: "set null" }),
+    notes: text("notes"),
+    createdAt: text("created_at").notNull().default(now),
+    updatedAt: text("updated_at").notNull().default(now),
+  },
+  (t) => [index("holdings_kind_idx").on(t.kind)],
+)
+
+export const priceCache = sqliteTable("price_cache", {
+  coinId: text("coin_id").primaryKey(),
+  symbol: text("symbol").notNull(),
+  priceUsd: text("price_usd").notNull(),
+  priceTry: text("price_try").notNull(),
+  change24h: text("change_24h"),
+  updatedAt: text("updated_at").notNull(),
+})
+
+export const alertRules = sqliteTable(
+  "alert_rules",
+  {
+    id: text("id").primaryKey(),
+    coinId: text("coin_id").notNull(),
+    symbol: text("symbol").notNull(),
+    kind: text("kind").notNull(),
+    threshold: text("threshold").notNull(),
+    enabled: integer("enabled").notNull().default(1),
+    note: text("note"),
+    lastFiredAt: text("last_fired_at"),
+    createdAt: text("created_at").notNull().default(now),
+  },
+  (t) => [index("alert_rules_enabled_idx").on(t.enabled)],
+)
+
+export const alertEvents = sqliteTable(
+  "alert_events",
+  {
+    id: text("id").primaryKey(),
+    ruleId: text("rule_id").references(() => alertRules.id, { onDelete: "cascade" }),
+    symbol: text("symbol").notNull(),
+    title: text("title").notNull(),
+    body: text("body"),
+    level: text("level").notNull().default("info"),
+    readAt: text("read_at"),
+    createdAt: text("created_at").notNull().default(now),
+  },
+  (t) => [index("alert_events_read_idx").on(t.readAt)],
+)
+
 export const fxRates = sqliteTable("fx_rates", {
   date: text("date").primaryKey(),
   base: text("base").notNull(),
@@ -252,6 +322,10 @@ export const settings = sqliteTable("settings", {
 })
 
 export type FxRateRow = typeof fxRates.$inferSelect
+export type Wallet = typeof wallets.$inferSelect
+export type Holding = typeof holdings.$inferSelect
+export type AlertRule = typeof alertRules.$inferSelect
+export type AlertEvent = typeof alertEvents.$inferSelect
 export type Session = typeof sessions.$inferSelect
 export type VaultItem = typeof vaultItems.$inferSelect
 export type Goal = typeof goals.$inferSelect

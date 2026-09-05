@@ -6,6 +6,7 @@ import {
   ListChecks,
   NotebookPen,
   KeyRound,
+  LineChart,
   Settings,
   Target,
 } from "lucide-react"
@@ -51,6 +52,13 @@ export const NAV: { group: string; items: NavItem[] }[] = [
     items: [
       { href: "/odemeler", label: "Ödemeler", icon: CreditCard, description: "Tahsilatlar ve vade takibi", shortcut: "6" },
       { href: "/finans", label: "Gelir / Gider", icon: BarChart3, description: "Nakit akışı ve raporlar", shortcut: "7" },
+      {
+        href: "/yatirim",
+        label: "Yatırım",
+        icon: LineChart,
+        description: "Portföy, canlı fiyatlar ve uyarılar",
+        shortcut: "8",
+      },
     ],
   },
   {
