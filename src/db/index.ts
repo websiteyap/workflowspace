@@ -1,19 +1,43 @@
 import "server-only"
-import { createClient } from "@libsql/client"
-import { drizzle } from "drizzle-orm/libsql"
+import { mkdirSync } from "node:fs"
+import { dirname, resolve } from "node:path"
+import { type Client, createClient } from "@libsql/client"
+import { type LibSQLDatabase, drizzle } from "drizzle-orm/libsql"
 import * as schema from "./schema"
 
 const url = process.env.DATABASE_URL ?? "file:./data/source.db"
 
 const globalForDb = globalThis as unknown as {
-  __sourceDbClient?: ReturnType<typeof createClient>
+  __sourceDbClient?: Client
+  __sourceDbInstance?: LibSQLDatabase<typeof schema>
   __sourceDbReady?: Promise<void>
 }
 
-const client = globalForDb.__sourceDbClient ?? createClient({ url })
-if (process.env.NODE_ENV !== "production") globalForDb.__sourceDbClient = client
+function ensureDataDirectory() {
+  if (!url.startsWith("file:")) return
+  const filePath = url.slice(5).replace(/^\/{2,}/, "/")
+  mkdirSync(dirname(resolve(filePath)), { recursive: true })
+}
 
-export const db = drizzle(client, { schema })
+function client(): Client {
+  if (!globalForDb.__sourceDbClient) {
+    ensureDataDirectory()
+    globalForDb.__sourceDbClient = createClient({ url })
+  }
+  return globalForDb.__sourceDbClient
+}
+
+function instance(): LibSQLDatabase<typeof schema> {
+  globalForDb.__sourceDbInstance ??= drizzle(client(), { schema })
+  return globalForDb.__sourceDbInstance
+}
+
+export const db = new Proxy({} as LibSQLDatabase<typeof schema>, {
+  get(_target, property, receiver) {
+    const value = Reflect.get(instance(), property, receiver)
+    return typeof value === "function" ? value.bind(instance()) : value
+  },
+})
 
 const DDL = [
   `CREATE TABLE IF NOT EXISTS clients (
@@ -140,21 +164,21 @@ const ADDED_COLUMNS: [table: string, column: string, definition: string][] = [
 ]
 
 async function ensureColumn(table: string, column: string, definition: string) {
-  const res = await client.execute({
+  const res = await client().execute({
     sql: `SELECT COUNT(*) AS n FROM pragma_table_info(?) WHERE name = ?`,
     args: [table, column],
   })
   if (Number(res.rows[0]?.n ?? 0) === 0) {
-    await client.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+    await client().execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
   }
 }
 
 const POST_DDL = [`CREATE INDEX IF NOT EXISTS tasks_remind_idx ON tasks(remind_at)`]
 
 async function migrate() {
-  for (const stmt of DDL) await client.execute(stmt)
+  for (const stmt of DDL) await client().execute(stmt)
   for (const [table, column, definition] of ADDED_COLUMNS) await ensureColumn(table, column, definition)
-  for (const stmt of POST_DDL) await client.execute(stmt)
+  for (const stmt of POST_DDL) await client().execute(stmt)
 }
 
 export function ready() {
