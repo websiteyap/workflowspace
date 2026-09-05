@@ -9,6 +9,13 @@ export default async function VaultPage() {
   const rows = config.initialized ? await listVaultItems() : []
 
   return (
-    <VaultClient initialized={config.initialized} salt={config.salt} check={config.check} rows={rows} />
+    <VaultClient
+      initialized={config.initialized}
+      salt={config.salt}
+      check={config.check}
+      rows={rows}
+      requires2fa={config.requires2fa}
+      twoFactorAvailable={config.twoFactorAvailable}
+    />
   )
 }

@@ -2,11 +2,13 @@ import { Sidebar } from "@/components/layout/sidebar"
 import { Topbar } from "@/components/layout/topbar"
 import { ReminderEngine } from "@/components/reminders/reminder-engine"
 import { redirect } from "next/navigation"
+import { ipAllowed } from "@/lib/auth/ip-allowlist"
 import { activeSession, touchSession } from "@/lib/auth/store"
 import { moneyContext } from "@/lib/display-currency"
 import { searchIndex } from "@/lib/queries"
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  if (!(await ipAllowed())) redirect("/giris")
   const session = await activeSession()
   if (!session) redirect("/giris")
   void touchSession(session.id)

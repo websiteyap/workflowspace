@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { headers } from "next/headers"
 import { Geist, Geist_Mono } from "next/font/google"
 import { PwaRegister } from "@/components/pwa-register"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -31,11 +32,19 @@ export const viewport = {
   ],
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const nonce = (await headers()).get("x-nonce") ?? undefined
+
   return (
     <html lang="tr" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+          nonce={nonce}
+        >
           <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
           <PwaRegister />
           <Toaster position="bottom-right" />

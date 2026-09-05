@@ -216,6 +216,22 @@ export const goalContributions = sqliteTable(
   (t) => [index("contrib_goal_idx").on(t.goalId), index("contrib_tx_idx").on(t.transactionId)],
 )
 
+export const passkeys = sqliteTable(
+  "passkeys",
+  {
+    id: text("id").primaryKey(),
+    label: text("label").notNull(),
+    publicKey: text("public_key").notNull(),
+    counter: integer("counter").notNull().default(0),
+    transports: text("transports"),
+    deviceType: text("device_type"),
+    backedUp: integer("backed_up").notNull().default(0),
+    lastUsedAt: text("last_used_at"),
+    createdAt: text("created_at").notNull().default(now),
+  },
+  (t) => [index("passkeys_created_idx").on(t.createdAt)],
+)
+
 export const auditLog = sqliteTable(
   "audit_log",
   {
@@ -382,6 +398,7 @@ export const settings = sqliteTable("settings", {
 })
 
 export type FxRateRow = typeof fxRates.$inferSelect
+export type Passkey = typeof passkeys.$inferSelect
 export type AuditEntry = typeof auditLog.$inferSelect
 export type ErrorEntry = typeof errorLog.$inferSelect
 export type Wallet = typeof wallets.$inferSelect

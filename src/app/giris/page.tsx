@@ -1,7 +1,9 @@
 import { Suspense } from "react"
 import { Logo } from "@/components/layout/sidebar"
 import { Skeleton } from "@/components/ui/skeleton"
+import { hasPasskeys } from "@/lib/actions/passkeys"
 import { LoginForm } from "./login-form"
+import { PasskeyLogin } from "./passkey-login"
 
 export const dynamic = "force-dynamic"
 export const metadata = { title: "Giriş" }
@@ -12,6 +14,7 @@ export default async function LoginPage({
   searchParams: Promise<{ devam?: string }>
 }) {
   const { devam } = await searchParams
+  const passkeysAvailable = await hasPasskeys()
   const next = devam && devam.startsWith("/") && !devam.startsWith("//") ? devam : "/"
 
   return (
@@ -29,6 +32,11 @@ export default async function LoginPage({
           <Suspense fallback={<Skeleton className="h-56 w-full" />}>
             <LoginForm next={next} />
           </Suspense>
+          {passkeysAvailable && (
+            <div className="mt-4">
+              <PasskeyLogin next={next} />
+            </div>
+          )}
         </div>
       </div>
     </main>

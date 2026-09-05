@@ -41,7 +41,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { deleteVaultItem, initVault, saveVaultItem } from "@/lib/actions/vault"
+import { deleteVaultItem, initVault, saveVaultItem, setVaultTwoFactor, verifyVaultCode } from "@/lib/actions/vault"
 import { VAULT_CATEGORY } from "@/lib/constants"
 import {
   CHECK_PLAINTEXT,
@@ -213,11 +213,15 @@ export function VaultClient({
   salt,
   check,
   rows,
+  requires2fa,
+  twoFactorAvailable,
 }: {
   initialized: boolean
   salt: string | null
   check: string | null
   rows: Row[]
+  requires2fa: boolean
+  twoFactorAvailable: boolean
 }) {
   const [key, setKey] = React.useState<CryptoKey | null>(null)
   const [items, setItems] = React.useState<Decrypted[]>([])
@@ -226,6 +230,7 @@ export function VaultClient({
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState("")
   const [q, setQ] = React.useState("")
+  const [code, setCode] = React.useState("")
   const [editing, setEditing] = React.useState<Decrypted | null>(null)
   const [adding, setAdding] = React.useState(false)
   const [revealed, setRevealed] = React.useState<string | null>(null)
@@ -298,6 +303,13 @@ export function VaultClient({
     if (!salt || !check) return
     setBusy(true)
     try {
+      if (requires2fa) {
+        const verified = await verifyVaultCode(code)
+        if (verified.error) {
+          setError(verified.error)
+          return
+        }
+      }
       const k = await deriveKey(master, salt)
       try {
         const value = await decrypt(k, check)
@@ -309,6 +321,7 @@ export function VaultClient({
       setKey(k)
       setItems(await decryptAll(k, rows))
       setMaster("")
+      setCode("")
     } finally {
       setBusy(false)
     }
@@ -386,8 +399,21 @@ export function VaultClient({
               autoFocus
             />
           </div>
+          {requires2fa && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Doğrulama kodu</Label>
+              <Input
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && unlock()}
+                inputMode="numeric"
+                placeholder="123456"
+                className="tabular tracking-[0.3em]"
+              />
+            </div>
+          )}
           {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-          <Button className="w-full gap-1.5" onClick={unlock} disabled={busy || !master}>
+          <Button className="w-full gap-1.5" onClick={unlock} disabled={busy || !master || (requires2fa && code.length < 6)}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <LockOpen className="size-4" />}
             Kilidi aç
           </Button>
@@ -510,6 +536,27 @@ export function VaultClient({
             </div>
           ))}
         </div>
+      )}
+
+      {twoFactorAvailable && (
+        <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border bg-card p-4">
+          <span className="space-y-0.5">
+            <span className="block text-sm font-medium">Kasayı açarken doğrulama kodu iste</span>
+            <span className="block text-xs text-muted-foreground">
+              Ana parolanın yanında telefonundaki 6 haneli kodu da sorar.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            checked={requires2fa}
+            onChange={async (e) => {
+              const result = await setVaultTwoFactor(e.target.checked)
+              if (result.error) toast.error(result.error)
+              else toast.success(e.target.checked ? "Açıldı" : "Kapatıldı")
+            }}
+            className="size-4 accent-foreground"
+          />
+        </label>
       )}
 
       <div className="flex items-start gap-3 rounded-xl border bg-card p-4">

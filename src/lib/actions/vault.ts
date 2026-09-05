@@ -7,15 +7,49 @@ import { vaultItems } from "@/db/schema"
 import { requireSession } from "@/lib/auth/guard"
 import { audit } from "@/lib/observability"
 import { getSetting, setSetting } from "@/lib/auth/store"
+import { open } from "@/lib/auth/secret-box"
+import { verifyCode } from "@/lib/auth/totp"
 import { newId, nowISO } from "./helpers"
 
 const VAULT_SALT = "vault_salt"
+const VAULT_2FA = "vault_require_2fa"
 const VAULT_CHECK = "vault_check"
 
 export async function vaultConfig() {
   await requireSession()
-  const [salt, check] = await Promise.all([getSetting(VAULT_SALT), getSetting(VAULT_CHECK)])
-  return { initialized: Boolean(salt && check), salt, check }
+  const [salt, check, require2fa, totp] = await Promise.all([
+    getSetting(VAULT_SALT),
+    getSetting(VAULT_CHECK),
+    getSetting(VAULT_2FA),
+    getSetting("totp_secret"),
+  ])
+  return {
+    initialized: Boolean(salt && check),
+    salt,
+    check,
+    requires2fa: require2fa === "1" && Boolean(totp),
+    twoFactorAvailable: Boolean(totp),
+  }
+}
+
+export async function setVaultTwoFactor(enabled: boolean) {
+  const session = await requireSession()
+  if (enabled && !(await getSetting("totp_secret"))) {
+    return { error: "Önce hesap için iki adımlı doğrulamayı açman gerekiyor." }
+  }
+  await setSetting(VAULT_2FA, enabled ? "1" : "0")
+  await audit(enabled ? "vault_2fa_enabled" : "vault_2fa_disabled", "vault", { sessionId: session.id })
+  revalidatePath("/kasa")
+  return { ok: true }
+}
+
+export async function verifyVaultCode(code: string) {
+  await requireSession()
+  const sealed = await getSetting("totp_secret")
+  if (!sealed) return { ok: true }
+  const secret = open(sealed)
+  if (!verifyCode(secret, code)) return { error: "Doğrulama kodu hatalı." }
+  return { ok: true }
 }
 
 export async function initVault(salt: string, check: string) {

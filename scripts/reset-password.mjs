@@ -52,6 +52,8 @@ try {
   /* tablo yoksa sorun degil */
 }
 
-console.log("Parola sifirlandi.")
+await client.execute(`DELETE FROM settings WHERE key = 'allowed_ips'`)
+
+console.log("Parola sifirlandi. IP kisitlamasi da temizlendi.")
 if (username) console.log("Kullanici adi:", username)
 console.log("Tum oturumlar kapatildi, yeniden giris yapman gerekiyor.")

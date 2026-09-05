@@ -6,7 +6,7 @@ import { type LibSQLDatabase, drizzle } from "drizzle-orm/libsql"
 import * as schema from "./schema"
 
 const url = process.env.DATABASE_URL ?? "file:./data/source.db"
-const SCHEMA_VERSION = "6"
+const SCHEMA_VERSION = "7"
 
 const globalForDb = globalThis as unknown as {
   __sourceDbClient?: Client
@@ -226,6 +226,18 @@ const DDL = [
   )`,
   `CREATE INDEX IF NOT EXISTS contrib_goal_idx ON goal_contributions(goal_id)`,
   `CREATE INDEX IF NOT EXISTS contrib_tx_idx ON goal_contributions(transaction_id)`,
+  `CREATE TABLE IF NOT EXISTS passkeys (
+    id TEXT PRIMARY KEY,
+    label TEXT NOT NULL,
+    public_key TEXT NOT NULL,
+    counter INTEGER NOT NULL DEFAULT 0,
+    transports TEXT,
+    device_type TEXT,
+    backed_up INTEGER NOT NULL DEFAULT 0,
+    last_used_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS passkeys_created_idx ON passkeys(created_at)`,
   `CREATE TABLE IF NOT EXISTS audit_log (
     id TEXT PRIMARY KEY,
     action TEXT NOT NULL,

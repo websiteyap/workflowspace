@@ -6,6 +6,7 @@ import { cookies, headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { db, ready } from "@/db"
 import { loginAttempts } from "@/db/schema"
+import { ipAllowed } from "@/lib/auth/ip-allowlist"
 import { audit } from "@/lib/observability"
 import { hashPassword, verifyPassword } from "@/lib/auth/password"
 import { PASSWORD_KEY, USERNAME_KEY, credentialsOverridden, currentPasswordHash, currentUsername } from "@/lib/auth/credentials"
@@ -100,6 +101,11 @@ export async function login(_prev: ActionState, formData: FormData): Promise<Act
   const [expectedUser, expectedHash] = await Promise.all([currentUsername(), currentPasswordHash()])
   if (!expectedUser || !expectedHash || !process.env.AUTH_SECRET) {
     return { error: "Sunucu kimlik doğrulama için yapılandırılmamış." }
+  }
+
+  if (!(await ipAllowed())) {
+    await audit("login_blocked_ip", "auth", { summary: username.slice(0, 60) })
+    return { error: "Bu ağdan erişime izin verilmiyor." }
   }
 
   const key = await clientKey()
@@ -274,4 +280,33 @@ export async function accountInfo() {
   const session = await activeSession()
   if (!session) return { username: null, overridden: false }
   return { username: await currentUsername(), overridden: await credentialsOverridden() }
+}
+
+export async function ipSettings() {
+  const session = await activeSession()
+  if (!session) return { list: [], current: null }
+  const { allowedIps, clientIp } = await import("@/lib/auth/ip-allowlist")
+  return { list: await allowedIps(), current: await clientIp() }
+}
+
+export async function saveIpAllowlist(list: string[]) {
+  const session = await activeSession()
+  if (!session) return { error: "Oturum geçersiz." }
+
+  const { clientIp, saveAllowedIps } = await import("@/lib/auth/ip-allowlist")
+  const cleaned = list.map((v) => v.trim()).filter(Boolean)
+  const current = await clientIp()
+
+  if (cleaned.length > 0 && current) {
+    const covered = cleaned.some(
+      (rule) => rule === current || (rule.endsWith("*") && current.startsWith(rule.slice(0, -1))),
+    )
+    if (!covered) {
+      return { error: "Listede kendi IP adresin yok. Kendini kilitlememek için önce onu ekle." }
+    }
+  }
+
+  await saveAllowedIps(cleaned)
+  await audit("ip_allowlist_changed", "auth", { sessionId: session.id, summary: cleaned.join(",") })
+  return { ok: true }
 }
