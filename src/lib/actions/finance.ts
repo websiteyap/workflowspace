@@ -3,12 +3,12 @@
 import { and, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db, ready } from "@/db"
-import { payments, transactions } from "@/db/schema"
+import { goalContributions, payments, transactions } from "@/db/schema"
 import { addMonths, toMinor, todayISO } from "@/lib/format"
 import { convertToBase } from "@/lib/fx"
 import { type ActionState, newId, nowISO, reqStr, ref, run, str } from "./helpers"
 
-const TOUCH = ["/", "/finans", "/odemeler", "/projeler"]
+const TOUCH = ["/", "/finans", "/odemeler", "/projeler", "/hedefler"]
 const touch = () => TOUCH.forEach((p) => revalidatePath(p))
 
 export async function saveTransaction(_prev: ActionState, fd: FormData): Promise<ActionState> {
@@ -31,10 +31,63 @@ export async function saveTransaction(_prev: ActionState, fd: FormData): Promise
       projectId: ref(fd, "projectId"),
       method: str(fd, "method"),
     }
-    if (id) await db.update(transactions).set(data).where(eq(transactions.id, id))
-    else await db.insert(transactions).values({ id: newId(), ...data, createdAt: nowISO() })
+    let txId = id
+    if (id) {
+      await db.update(transactions).set(data).where(eq(transactions.id, id))
+    } else {
+      txId = newId()
+      await db.insert(transactions).values({ id: txId, ...data, createdAt: nowISO() })
+    }
+
+    if (txId) await applyGoalAllocation(txId, fd, data.type, amount, currency, converted, date)
+
     touch()
     return { ok: true }
+  })
+}
+
+async function applyGoalAllocation(
+  txId: string,
+  fd: FormData,
+  type: string,
+  amount: number,
+  currency: string,
+  converted: { baseAmount: number; fxRate: string },
+  date: string,
+) {
+  await db.delete(goalContributions).where(eq(goalContributions.transactionId, txId))
+
+  const goalId = ref(fd, "goalId")
+  if (!goalId || type !== "income") return
+
+  const mode = str(fd, "allocationMode") ?? "percent"
+  const rawValue = str(fd, "allocationValue")
+  if (!rawValue) return
+
+  let allocated: number
+  if (mode === "percent") {
+    const percent = Math.min(100, Math.max(0, Number.parseFloat(rawValue.replace(",", ".")) || 0))
+    if (percent <= 0) return
+    allocated = Math.round((amount * percent) / 100)
+  } else {
+    allocated = Math.min(amount, toMinor(rawValue))
+  }
+  if (allocated <= 0) return
+
+  const allocatedBase = Math.round((converted.baseAmount * allocated) / amount)
+
+  await db.insert(goalContributions).values({
+    id: newId(),
+    goalId,
+    amount: allocated,
+    currency,
+    baseAmount: allocatedBase,
+    fxRate: converted.fxRate,
+    date,
+    source: "income_allocation",
+    transactionId: txId,
+    note: str(fd, "description"),
+    createdAt: nowISO(),
   })
 }
 

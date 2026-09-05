@@ -6,7 +6,7 @@ import { type LibSQLDatabase, drizzle } from "drizzle-orm/libsql"
 import * as schema from "./schema"
 
 const url = process.env.DATABASE_URL ?? "file:./data/source.db"
-const SCHEMA_VERSION = "2"
+const SCHEMA_VERSION = "3"
 
 const globalForDb = globalThis as unknown as {
   __sourceDbClient?: Client
@@ -176,6 +176,39 @@ const DDL = [
     method TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   )`,
+  `CREATE TABLE IF NOT EXISTS goals (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'other',
+    url TEXT,
+    notes TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
+    priority TEXT NOT NULL DEFAULT 'medium',
+    target_amount INTEGER,
+    currency TEXT NOT NULL DEFAULT 'TRY',
+    base_target_amount INTEGER,
+    fx_rate TEXT,
+    target_date TEXT,
+    completed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS goals_status_idx ON goals(status)`,
+  `CREATE TABLE IF NOT EXISTS goal_contributions (
+    id TEXT PRIMARY KEY,
+    goal_id TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+    amount INTEGER NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'TRY',
+    base_amount INTEGER NOT NULL DEFAULT 0,
+    fx_rate TEXT,
+    date TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'manual',
+    transaction_id TEXT REFERENCES transactions(id) ON DELETE CASCADE,
+    note TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS contrib_goal_idx ON goal_contributions(goal_id)`,
+  `CREATE INDEX IF NOT EXISTS contrib_tx_idx ON goal_contributions(transaction_id)`,
   `CREATE TABLE IF NOT EXISTS fx_rates (
     date TEXT PRIMARY KEY,
     base TEXT NOT NULL,

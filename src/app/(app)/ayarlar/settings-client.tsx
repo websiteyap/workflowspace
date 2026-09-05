@@ -60,7 +60,7 @@ export function DataTools({ counts }: { counts: Record<string, number> }) {
           </p>
         </div>
 
-        <dl className="grid grid-cols-2 gap-px border-b bg-border sm:grid-cols-3 lg:grid-cols-6">
+        <dl className="grid grid-cols-2 gap-px border-b bg-border sm:grid-cols-3 lg:grid-cols-7">
           {[
             ["İş", counts.projects],
             ["Alan adı", counts.domains],
@@ -68,6 +68,7 @@ export function DataTools({ counts }: { counts: Record<string, number> }) {
             ["Not", counts.notes],
             ["Ödeme", counts.payments],
             ["Hareket", counts.transactions],
+            ["Hedef", counts.goals],
           ].map(([label, n]) => (
             <div key={String(label)} className="bg-card px-4 py-3">
               <dt className="text-xs text-muted-foreground">{label}</dt>

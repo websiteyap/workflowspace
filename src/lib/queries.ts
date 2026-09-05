@@ -1,7 +1,17 @@
 import "server-only"
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, lte, ne, sql } from "drizzle-orm"
 import { db, ready } from "@/db"
-import { notes, payments, projectDomains, projectItems, projects, tasks, transactions } from "@/db/schema"
+import {
+  goalContributions,
+  goals,
+  notes,
+  payments,
+  projectDomains,
+  projectItems,
+  projects,
+  tasks,
+  transactions,
+} from "@/db/schema"
 import { CYCLE_MONTHS } from "./constants"
 import { monthRange, todayISO } from "./format"
 
@@ -10,16 +20,24 @@ const sumPay = sql<number>`coalesce(sum(${payments.baseAmount}), 0)`
 
 export async function lookups() {
   await ready()
-  const rows = await db
-    .select({ value: projects.id, label: projects.name, clientName: projects.clientName })
-    .from(projects)
-    .where(ne(projects.status, "cancelled"))
-    .orderBy(asc(projects.name))
+  const [rows, goalRows] = await Promise.all([
+    db
+      .select({ value: projects.id, label: projects.name, clientName: projects.clientName })
+      .from(projects)
+      .where(ne(projects.status, "cancelled"))
+      .orderBy(asc(projects.name)),
+    db
+      .select({ value: goals.id, label: goals.title })
+      .from(goals)
+      .where(eq(goals.status, "open"))
+      .orderBy(asc(goals.title)),
+  ])
   return {
     projects: rows.map((r) => ({
       value: r.value,
       label: r.clientName ? `${r.label} — ${r.clientName}` : r.label,
     })),
+    goals: goalRows,
   }
 }
 
@@ -427,6 +445,52 @@ export async function financeSummary(from: string, to: string) {
   return { income, expense, net: income - expense, count: rows.reduce((a, b) => a + Number(b.n), 0) }
 }
 
+export async function goalsList() {
+  await ready()
+  const rows = await db
+    .select({
+      goal: goals,
+      saved: sql<number>`(select coalesce(sum(c.base_amount),0) from goal_contributions c where c.goal_id = ${goals.id})`,
+      contributions: sql<number>`(select count(*) from goal_contributions c where c.goal_id = ${goals.id})`,
+    })
+    .from(goals)
+    .orderBy(asc(goals.status), desc(goals.updatedAt))
+
+  return rows.map((r) => {
+    const saved = Number(r.saved)
+    const target = r.goal.baseTargetAmount ?? 0
+    return {
+      ...r.goal,
+      saved,
+      contributions: Number(r.contributions),
+      remaining: Math.max(0, target - saved),
+      progress: target > 0 ? Math.min(100, Math.round((saved / target) * 100)) : null,
+      funded: target > 0 && saved >= target,
+    }
+  })
+}
+
+export type GoalRow = Awaited<ReturnType<typeof goalsList>>[number]
+
+export async function goalHistory(goalId: string) {
+  await ready()
+  return db
+    .select()
+    .from(goalContributions)
+    .where(eq(goalContributions.goalId, goalId))
+    .orderBy(desc(goalContributions.date))
+}
+
+export async function reservedTotal() {
+  await ready()
+  const [row] = await db
+    .select({ total: sql<number>`coalesce(sum(${goalContributions.baseAmount}), 0)` })
+    .from(goalContributions)
+    .innerJoin(goals, eq(goalContributions.goalId, goals.id))
+    .where(eq(goals.status, "open"))
+  return Number(row?.total ?? 0)
+}
+
 export async function dataCounts() {
   await ready()
   const [p] = await db.select({ n: count() }).from(projects)
@@ -435,7 +499,9 @@ export async function dataCounts() {
   const [pm] = await db.select({ n: count() }).from(payments)
   const [tx] = await db.select({ n: count() }).from(transactions)
   const [d] = await db.select({ n: count() }).from(projectDomains)
+  const [g] = await db.select({ n: count() }).from(goals)
   return {
+    goals: g?.n ?? 0,
     projects: p?.n ?? 0,
     tasks: t?.n ?? 0,
     notes: n?.n ?? 0,

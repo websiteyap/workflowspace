@@ -2,7 +2,17 @@
 
 import { revalidatePath } from "next/cache"
 import { db, ready } from "@/db"
-import { notes, payments, projectDomains, projectItems, projects, tasks, transactions } from "@/db/schema"
+import {
+  goalContributions,
+  goals,
+  notes,
+  payments,
+  projectDomains,
+  projectItems,
+  projects,
+  tasks,
+  transactions,
+} from "@/db/schema"
 import { nowISO } from "./helpers"
 
 const PATHS = ["/", "/gorevler", "/notlar", "/projeler", "/odemeler", "/finans", "/ayarlar"]
@@ -12,6 +22,8 @@ const touchAll = () => {
 
 export async function clearAllData() {
   await ready()
+  await db.delete(goalContributions)
+  await db.delete(goals)
   await db.delete(transactions)
   await db.delete(payments)
   await db.delete(tasks)
@@ -24,7 +36,7 @@ export async function clearAllData() {
 
 export async function exportData() {
   await ready()
-  const [p, d, i, t, n, pm, tx] = await Promise.all([
+  const [p, d, i, t, n, pm, tx, g, gc] = await Promise.all([
     db.select().from(projects),
     db.select().from(projectDomains),
     db.select().from(projectItems),
@@ -32,10 +44,12 @@ export async function exportData() {
     db.select().from(notes),
     db.select().from(payments),
     db.select().from(transactions),
+    db.select().from(goals),
+    db.select().from(goalContributions),
   ])
   return JSON.stringify(
     {
-      version: 2,
+      version: 3,
       exportedAt: nowISO(),
       projects: p,
       projectDomains: d,
@@ -44,6 +58,8 @@ export async function exportData() {
       notes: n,
       payments: pm,
       transactions: tx,
+      goals: g,
+      goalContributions: gc,
     },
     null,
     2,
@@ -59,6 +75,8 @@ type Backup = {
   notes?: unknown[]
   payments?: unknown[]
   transactions?: unknown[]
+  goals?: unknown[]
+  goalContributions?: unknown[]
 }
 
 export async function importData(json: string) {
@@ -74,8 +92,8 @@ export async function importData(json: string) {
   if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.projects)) {
     return { error: "Bu dosya bir Source yedeği gibi görünmüyor." }
   }
-  if (parsed.version !== 2) {
-    return { error: `Desteklenmeyen yedek sürümü (${parsed.version ?? "bilinmiyor"}). Sürüm 2 bekleniyor.` }
+  if (parsed.version !== 2 && parsed.version !== 3) {
+    return { error: `Desteklenmeyen yedek sürümü (${parsed.version ?? "bilinmiyor"}).` }
   }
 
   const counts = {
@@ -86,6 +104,7 @@ export async function importData(json: string) {
     notes: parsed.notes?.length ?? 0,
     payments: parsed.payments?.length ?? 0,
     transactions: parsed.transactions?.length ?? 0,
+    goals: parsed.goals?.length ?? 0,
   }
 
   try {
@@ -103,6 +122,8 @@ export async function importData(json: string) {
     await insert(notes, parsed.notes)
     await insert(payments, parsed.payments)
     await insert(transactions, parsed.transactions)
+    await insert(goals, parsed.goals)
+    await insert(goalContributions, parsed.goalContributions)
   } catch (error) {
     console.error(error)
     return { error: "İçe aktarma sırasında hata oluştu. Veriler kısmen yüklenmiş olabilir." }

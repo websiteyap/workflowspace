@@ -24,6 +24,7 @@ const QUICK = [
   { label: "İş / Proje", href: "/projeler?new=project" },
   { label: "Görev", href: "/gorevler?new=task" },
   { label: "Not", href: "/notlar?new=note" },
+  { label: "Hedef", href: "/hedefler?new=goal" },
   { label: "Ödeme", href: "/odemeler?new=payment" },
   { label: "Gelir / Gider", href: "/finans?new=transaction" },
 ]

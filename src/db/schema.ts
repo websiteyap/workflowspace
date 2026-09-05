@@ -174,6 +174,48 @@ export const transactions = sqliteTable(
   (t) => [index("tx_date_idx").on(t.date), index("tx_type_idx").on(t.type)],
 )
 
+export const goals = sqliteTable(
+  "goals",
+  {
+    id: text("id").primaryKey(),
+    title: text("title").notNull(),
+    type: text("type").notNull().default("other"),
+    url: text("url"),
+    notes: text("notes"),
+    status: text("status").notNull().default("open"),
+    priority: text("priority").notNull().default("medium"),
+    targetAmount: integer("target_amount"),
+    currency: text("currency").notNull().default("TRY"),
+    baseTargetAmount: integer("base_target_amount"),
+    fxRate: text("fx_rate"),
+    targetDate: text("target_date"),
+    completedAt: text("completed_at"),
+    createdAt: text("created_at").notNull().default(now),
+    updatedAt: text("updated_at").notNull().default(now),
+  },
+  (t) => [index("goals_status_idx").on(t.status)],
+)
+
+export const goalContributions = sqliteTable(
+  "goal_contributions",
+  {
+    id: text("id").primaryKey(),
+    goalId: text("goal_id")
+      .notNull()
+      .references(() => goals.id, { onDelete: "cascade" }),
+    amount: integer("amount").notNull(),
+    currency: text("currency").notNull().default("TRY"),
+    baseAmount: integer("base_amount").notNull().default(0),
+    fxRate: text("fx_rate"),
+    date: text("date").notNull(),
+    source: text("source").notNull().default("manual"),
+    transactionId: text("transaction_id").references(() => transactions.id, { onDelete: "cascade" }),
+    note: text("note"),
+    createdAt: text("created_at").notNull().default(now),
+  },
+  (t) => [index("contrib_goal_idx").on(t.goalId), index("contrib_tx_idx").on(t.transactionId)],
+)
+
 export const fxRates = sqliteTable("fx_rates", {
   date: text("date").primaryKey(),
   base: text("base").notNull(),
@@ -188,6 +230,8 @@ export const settings = sqliteTable("settings", {
 })
 
 export type FxRateRow = typeof fxRates.$inferSelect
+export type Goal = typeof goals.$inferSelect
+export type GoalContribution = typeof goalContributions.$inferSelect
 export type Project = typeof projects.$inferSelect
 export type ProjectDomain = typeof projectDomains.$inferSelect
 export type ProjectItem = typeof projectItems.$inferSelect

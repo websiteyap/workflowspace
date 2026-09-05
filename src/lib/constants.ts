@@ -51,6 +51,21 @@ export const TASK_STATUS: Option[] = [
   { value: "done", label: "Tamamlandı", tone: "green" },
 ]
 
+export const GOAL_TYPE: Option[] = [
+  { value: "subscription", label: "Abonelik", tone: "violet" },
+  { value: "book", label: "Kitap", tone: "amber" },
+  { value: "article", label: "Makale / kurs", tone: "blue" },
+  { value: "gadget", label: "Cihaz / donanım", tone: "neutral" },
+  { value: "tool", label: "Araç / yazılım", tone: "green" },
+  { value: "other", label: "Diğer", tone: "neutral" },
+]
+
+export const GOAL_STATUS: Option[] = [
+  { value: "open", label: "Açık", tone: "blue" },
+  { value: "done", label: "Tamamlandı", tone: "green" },
+  { value: "dropped", label: "Vazgeçildi", tone: "neutral" },
+]
+
 export const PAYMENT_STATUS: Option[] = [
   { value: "pending", label: "Bekliyor", tone: "amber" },
   { value: "paid", label: "Ödendi", tone: "green" },

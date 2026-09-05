@@ -8,7 +8,7 @@ import { StatCard } from "@/components/shared/stat-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatBase, fromBase, monthRange } from "@/lib/format"
 import { moneyContext } from "@/lib/display-currency"
-import { cashflowSeries, categoryBreakdown, financeSummary, lookups, transactionsList } from "@/lib/queries"
+import { cashflowSeries, categoryBreakdown, financeSummary, lookups, reservedTotal, transactionsList } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 import { NewTransactionButton, TransactionsTable } from "./finance-client"
 
@@ -64,6 +64,7 @@ export default async function FinancePage({
     lookups(),
     moneyContext(),
   ])
+  const reserved = await reservedTotal()
   const { display, rates } = mc
   const fmt = (v: number) => formatBase(v, display, rates)
   const chartData = series.map((s) => ({
@@ -82,7 +83,7 @@ export default async function FinancePage({
         description={`${range.label} · ${summary.count} hareket · ${display} cinsinden`}
         actions={
           <Suspense fallback={null}>
-            <NewTransactionButton projects={look.projects} />
+            <NewTransactionButton projects={look.projects} goals={look.goals} />
           </Suspense>
         }
       />
@@ -111,7 +112,13 @@ export default async function FinancePage({
           icon={Wallet}
           accent={summary.net >= 0 ? "positive" : "negative"}
         />
-        <StatCard label="Kâr marjı" value={`%${margin}`} icon={PiggyBank} hint="net / gelir" />
+        <StatCard
+          label="Serbest bakiye"
+          value={fmt(summary.net - reserved)}
+          icon={PiggyBank}
+          hint={reserved > 0 ? `${fmt(reserved)} kumbarada bloke` : `kâr marjı %${margin}`}
+          accent={summary.net - reserved >= 0 ? undefined : "negative"}
+        />
       </div>
 
       <section className="rounded-xl border bg-card">
@@ -146,7 +153,13 @@ export default async function FinancePage({
       </div>
 
       <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-        <TransactionsTable transactions={txs} projects={look.projects} display={display} rates={rates} />
+        <TransactionsTable
+          transactions={txs}
+          projects={look.projects}
+          goals={look.goals}
+          display={display}
+          rates={rates}
+        />
       </Suspense>
     </div>
   )

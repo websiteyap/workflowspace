@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils"
 
 export type TxRow = Transaction & { projectName: string | null }
 
-function RowActions({ tx, projects }: { tx: TxRow; projects: Lookup[] }) {
+function RowActions({ tx, projects, goals }: { tx: TxRow; projects: Lookup[]; goals: Lookup[] }) {
   const [edit, setEdit] = React.useState(false)
   const [del, setDel] = React.useState(false)
   return (
@@ -45,7 +45,7 @@ function RowActions({ tx, projects }: { tx: TxRow; projects: Lookup[] }) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <TransactionDialog transaction={tx} projects={projects} open={edit} onOpenChange={setEdit} />
+      <TransactionDialog transaction={tx} projects={projects} goals={goals} open={edit} onOpenChange={setEdit} />
       <ConfirmDialog
         open={del}
         onOpenChange={setDel}
@@ -57,11 +57,12 @@ function RowActions({ tx, projects }: { tx: TxRow; projects: Lookup[] }) {
   )
 }
 
-export function NewTransactionButton({ projects }: { projects: Lookup[] }) {
+export function NewTransactionButton({ projects, goals }: { projects: Lookup[]; goals: Lookup[] }) {
   const [open, setOpen] = useNewParam("transaction")
   return (
     <TransactionDialog
       projects={projects}
+      goals={goals}
       open={open}
       onOpenChange={setOpen}
       trigger={
@@ -76,11 +77,13 @@ export function NewTransactionButton({ projects }: { projects: Lookup[] }) {
 export function TransactionsTable({
   transactions,
   projects,
+  goals,
   display,
   rates,
 }: {
   transactions: TxRow[]
   projects: Lookup[]
+  goals: Lookup[]
   display: string
   rates: RateMap
 }) {
@@ -194,7 +197,7 @@ export function TransactionsTable({
                     )}
                   </TableCell>
                   <TableCell>
-                    <RowActions tx={t} projects={projects} />
+                    <RowActions tx={t} projects={projects} goals={goals} />
                   </TableCell>
                 </TableRow>
               ))}

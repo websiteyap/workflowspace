@@ -6,6 +6,7 @@ import {
   ListChecks,
   NotebookPen,
   Settings,
+  Target,
 } from "lucide-react"
 
 export type NavItem = {
@@ -23,6 +24,13 @@ export const NAV: { group: string; items: NavItem[] }[] = [
       { href: "/", label: "Panel", icon: LayoutDashboard, description: "Günün özeti", shortcut: "1" },
       { href: "/gorevler", label: "Görevler", icon: ListChecks, description: "Günlük hedefler ve yapılacaklar", shortcut: "2" },
       { href: "/notlar", label: "Notlar", icon: NotebookPen, description: "Fikirler, toplantı notları, snippet'ler", shortcut: "3" },
+      {
+        href: "/hedefler",
+        label: "Hedefler",
+        icon: Target,
+        description: "İstek listesi ve kumbaralar",
+        shortcut: "4",
+      },
     ],
   },
   {
@@ -33,15 +41,15 @@ export const NAV: { group: string; items: NavItem[] }[] = [
         label: "İşler",
         icon: FolderKanban,
         description: "Projeler, müşteriler, döngüsel ücretler",
-        shortcut: "4",
+        shortcut: "5",
       },
     ],
   },
   {
     group: "Finans",
     items: [
-      { href: "/odemeler", label: "Ödemeler", icon: CreditCard, description: "Tahsilatlar ve vade takibi", shortcut: "5" },
-      { href: "/finans", label: "Gelir / Gider", icon: BarChart3, description: "Nakit akışı ve raporlar", shortcut: "6" },
+      { href: "/odemeler", label: "Ödemeler", icon: CreditCard, description: "Tahsilatlar ve vade takibi", shortcut: "6" },
+      { href: "/finans", label: "Gelir / Gider", icon: BarChart3, description: "Nakit akışı ve raporlar", shortcut: "7" },
     ],
   },
   {
