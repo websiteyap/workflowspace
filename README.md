@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Source
 
-## Getting Started
+Freelance çalışanlar için tek panelde çalışma alanı: günlük hedefler, hatırlatıcılar, notlar,
+müşteriler, projeler, ödeme vadeleri ve gelir–gider takibi.
 
-First, run the development server:
+Next.js 15 · React 19 · Tailwind v4 · shadcn/ui · Drizzle ORM · SQLite (libSQL)
+
+## Kurulum
+
+```bash
+npm install
+cp .env.example .env.local
+node scripts/hash-password.mjs 'parolaniz'
+```
+
+Çıkan `AUTH_PASSWORD_HASH` ve `AUTH_SECRET` satırlarını `.env.local` içine yapıştırın,
+`AUTH_USERNAME` değerini belirleyin, ardından:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Veritabanı ilk çalıştırmada `data/source.db` olarak oluşur; ayrı bir migration adımı yoktur.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Ortam değişkenleri
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Değişken | Açıklama |
+|---|---|
+| `AUTH_USERNAME` | Giriş kullanıcı adı |
+| `AUTH_PASSWORD_HASH` | `scrypt:<salt>:<hash>` — `scripts/hash-password.mjs` üretir |
+| `AUTH_SECRET` | Oturum çerezini imzalar, en az 32 karakter |
+| `DATABASE_URL` | Varsayılan `file:./data/source.db` |
 
-## Learn More
+## Modüller
 
-To learn more about Next.js, take a look at the following resources:
+| Sayfa | İçerik |
+|---|---|
+| Panel | Aylık gelir/gider ve net kâr, bekleyen tahsilat, bugünün hedefleri, geciken görev ve ödemeler, aktif projeler, nakit akışı grafiği |
+| Görevler | Tarihe göre gruplama, hızlı ekleme, proje filtresi, hatırlatıcı kurma |
+| Notlar | Etiketli notlar, sabitleme, projeye veya müşteriye bağlama |
+| Müşteriler | İletişim ve fatura bilgileri, müşteri başına tahsilat ve bekleyen tutar |
+| Projeler | Durum, öncelik, ilerleme, bütçe/tahsilat oranı, görev ve ödeme listesi |
+| Ödemeler | Vade takibi, gecikme uyarısı, tek tıkla tahsilat kaydı, tekrarlı ödemeler |
+| Gelir / Gider | Dönem seçimli özet, kategori dağılımı, hareket listesi |
+| Ayarlar | Tema, bildirim izni, JSON yedek, veri yönetimi |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Hatırlatıcılar
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Göreve tarih–saat verildiğinde zamanı gelince sesli uyarı ve tarayıcı bildirimi gönderilir.
+Bildirim izni Ayarlar sayfasından verilir. Hatırlatıcılar uygulama sekmesi açıkken çalışır.
 
-## Deploy on Vercel
+## Kısayollar
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+`Ctrl/⌘ + K` komut paleti · `1`–`7` sayfa geçişi
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Docker
+
+```bash
+docker build -t source .
+docker run -p 3000:3000 -v source-data:/app/data \
+  -e AUTH_USERNAME=... -e AUTH_PASSWORD_HASH=... -e AUTH_SECRET=... source
+```
+
+Veritabanı `/app/data` altında tutulur; kalıcılık için bu dizin bir volume'a bağlanmalıdır.
+
+## Bilinen sınırlar
+
+- Kayıtlar kendi para birimini tutar; özet ve grafiklerdeki toplamlar kur çevrimi yapmaz.
+- Tek kullanıcılıdır.
