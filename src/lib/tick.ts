@@ -15,7 +15,7 @@ import { rateFor, todayISO } from "./format"
 import { getRates } from "./fx"
 import { getQuotes } from "./market"
 import { pruneLogs } from "./observability"
-import { sendPush } from "./push"
+import { notify } from "./notify"
 
 const COOLDOWN_MS = 6 * 60 * 60 * 1000
 const HISTORY_TARGET = 220
@@ -231,7 +231,7 @@ async function runAlerts() {
       createdAt: new Date().toISOString(),
     })
     await db.update(alertRules).set({ lastFiredAt: new Date().toISOString() }).where(eq(alertRules.id, rule.id))
-    await sendPush({ title, body, url: "/yatirim", tag: `alert-${rule.id}` })
+    await notify({ title, body, url: "/yatirim", tag: `alert-${rule.id}` })
     fired += 1
   }
 
@@ -258,7 +258,7 @@ async function runTaskReminders() {
     .limit(20)
 
   for (const task of due) {
-    await sendPush({ title: "Hatırlatıcı", body: task.title, url: "/gorevler", tag: `task-${task.id}` })
+    await notify({ title: "Hatırlatıcı", body: task.title, url: "/gorevler", tag: `task-${task.id}` })
     await db.update(tasks).set({ reminderFiredAt: now.toISOString() }).where(eq(tasks.id, task.id))
   }
   return due.length
@@ -282,7 +282,7 @@ async function runPaymentReminders() {
     )
     if (diff > days) continue
 
-    await sendPush({
+    await notify({
       title: "Ödeme yaklaşıyor",
       body: `${project.name}${project.clientName ? ` · ${project.clientName}` : ""} — ${
         diff <= 0 ? "vadesi geldi" : `${diff} gün kaldı`

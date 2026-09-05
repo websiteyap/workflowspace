@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/shared/page-header"
 import { accountInfo, ipSettings, twoFactorEnabled } from "@/lib/actions/auth"
+import { integrationSettings, webhookToken } from "@/lib/actions/integrations"
 import { listPasskeys } from "@/lib/actions/passkeys"
 import { activeSession, listSessions } from "@/lib/auth/store"
 import { pushSubscriptionCount } from "@/lib/actions/push"
@@ -11,6 +12,7 @@ import { AccountSection } from "./account-client"
 import { CalendarSection } from "./calendar-client"
 import { NetworkSection } from "./network-client"
 import { PasskeySection } from "./passkey-client"
+import { TelegramSection, WebhookSection } from "./integrations-client"
 import { LogsSection } from "./logs-client"
 import { SessionsSection, TwoFactorSection } from "./security-client"
 import { DataTools } from "./settings-client"
@@ -28,7 +30,13 @@ export default async function SettingsPage() {
     recentErrors(40),
     pushSubscriptionCount(),
   ])
-  const [account, passkeyList, ip] = await Promise.all([accountInfo(), listPasskeys(), ipSettings()])
+  const [account, passkeyList, ip, telegram, webhook] = await Promise.all([
+    accountInfo(),
+    listPasskeys(),
+    ipSettings(),
+    integrationSettings(),
+    webhookToken(),
+  ])
 
   const base = process.env.APP_URL ?? "https://workflow.pvdre.space"
   const calendarUrl = `${base}/api/takvim?t=${calendarToken()}`
@@ -49,6 +57,13 @@ export default async function SettingsPage() {
         </div>
         <div className="space-y-4">
           <DataTools counts={counts} />
+          <TelegramSection
+            configured={telegram.configured}
+            enabled={telegram.enabled}
+            chatId={telegram.chatId}
+            tokenPreview={telegram.tokenPreview}
+          />
+          <WebhookSection token={webhook} baseUrl={base} />
           <LogsSection audit={audit} errors={errors} />
         </div>
       </div>
