@@ -224,12 +224,36 @@ export const fxRates = sqliteTable("fx_rates", {
   fetchedAt: text("fetched_at").notNull(),
 })
 
+export const sessions = sqliteTable(
+  "sessions",
+  {
+    id: text("id").primaryKey(),
+    subject: text("subject").notNull(),
+    createdAt: text("created_at").notNull().default(now),
+    expiresAt: text("expires_at").notNull(),
+    lastSeenAt: text("last_seen_at"),
+    userAgent: text("user_agent"),
+    ip: text("ip"),
+    revokedAt: text("revoked_at"),
+  },
+  (t) => [index("sessions_expires_idx").on(t.expiresAt)],
+)
+
+export const vaultItems = sqliteTable("vault_items", {
+  id: text("id").primaryKey(),
+  cipher: text("cipher").notNull(),
+  createdAt: text("created_at").notNull().default(now),
+  updatedAt: text("updated_at").notNull().default(now),
+})
+
 export const settings = sqliteTable("settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
 })
 
 export type FxRateRow = typeof fxRates.$inferSelect
+export type Session = typeof sessions.$inferSelect
+export type VaultItem = typeof vaultItems.$inferSelect
 export type Goal = typeof goals.$inferSelect
 export type GoalContribution = typeof goalContributions.$inferSelect
 export type Project = typeof projects.$inferSelect

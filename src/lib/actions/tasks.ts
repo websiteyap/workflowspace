@@ -2,7 +2,8 @@
 
 import { and, asc, eq, gte, isNotNull, isNull, lte, ne } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
-import { db, ready } from "@/db"
+import { db } from "@/db"
+import { requireSession } from "@/lib/auth/guard"
 import { projects, tasks } from "@/db/schema"
 import { localInputToISO } from "@/lib/format"
 import { type ActionState, int, newId, nowISO, ref, reqStr, run, str } from "./helpers"
@@ -58,7 +59,7 @@ export async function quickTask(_prev: ActionState, fd: FormData): Promise<Actio
 }
 
 export async function toggleTask(id: string, done: boolean) {
-  await ready()
+  await requireSession()
   await db
     .update(tasks)
     .set({ status: done ? "done" : "todo", completedAt: done ? nowISO() : null, updatedAt: nowISO() })
@@ -67,32 +68,32 @@ export async function toggleTask(id: string, done: boolean) {
 }
 
 export async function moveTaskDate(id: string, dueDate: string | null) {
-  await ready()
+  await requireSession()
   await db.update(tasks).set({ dueDate, updatedAt: nowISO() }).where(eq(tasks.id, id))
   touch()
 }
 
 export async function deleteTask(id: string) {
-  await ready()
+  await requireSession()
   await db.delete(tasks).where(eq(tasks.id, id))
   touch()
 }
 
 export async function markReminderFired(id: string) {
-  await ready()
+  await requireSession()
   await db.update(tasks).set({ reminderFiredAt: nowISO() }).where(eq(tasks.id, id))
   touch()
 }
 
 export async function snoozeReminder(id: string, minutes: number) {
-  await ready()
+  await requireSession()
   const remindAt = new Date(Date.now() + minutes * 60_000).toISOString()
   await db.update(tasks).set({ remindAt, reminderFiredAt: null, updatedAt: nowISO() }).where(eq(tasks.id, id))
   touch()
 }
 
 export async function clearReminder(id: string) {
-  await ready()
+  await requireSession()
   await db.update(tasks).set({ remindAt: null, reminderFiredAt: null, updatedAt: nowISO() }).where(eq(tasks.id, id))
   touch()
 }
@@ -105,7 +106,7 @@ export type DueReminder = {
 }
 
 export async function fetchDueReminders(horizonMs = 75_000): Promise<DueReminder[]> {
-  await ready()
+  await requireSession()
   const now = Date.now()
   const until = new Date(now + horizonMs).toISOString()
   const since = new Date(now - 24 * 60 * 60_000).toISOString()

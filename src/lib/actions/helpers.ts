@@ -1,17 +1,12 @@
 import "server-only"
 import { randomUUID } from "node:crypto"
-import { ready } from "@/db"
+import { requireSession } from "@/lib/auth/guard"
 
-export type ActionState = { ok?: boolean; error?: string; id?: string } | null
+export type ActionState = { ok?: boolean; error?: string; id?: string; stage?: string } | null
 
 export const newId = () => randomUUID()
 
 export const nowISO = () => new Date().toISOString()
-
-export async function withDb<T>(fn: () => Promise<T>) {
-  await ready()
-  return fn()
-}
 
 export function str(fd: FormData, key: string): string | null {
   const v = fd.get(key)
@@ -47,7 +42,7 @@ export class ActionError extends Error {}
 
 export async function run(fn: () => Promise<ActionState>): Promise<ActionState> {
   try {
-    await ready()
+    await requireSession()
     return await fn()
   } catch (e) {
     if (e instanceof ActionError) return { error: e.message }

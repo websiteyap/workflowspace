@@ -60,7 +60,7 @@ export function DataTools({ counts }: { counts: Record<string, number> }) {
           </p>
         </div>
 
-        <dl className="grid grid-cols-2 gap-px border-b bg-border sm:grid-cols-3 lg:grid-cols-7">
+        <dl className="grid grid-cols-2 gap-px border-b bg-border sm:grid-cols-3 lg:grid-cols-3">
           {[
             ["İş", counts.projects],
             ["Alan adı", counts.domains],

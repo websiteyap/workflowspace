@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   ListChecks,
   NotebookPen,
+  KeyRound,
   Settings,
   Target,
 } from "lucide-react"
@@ -54,7 +55,10 @@ export const NAV: { group: string; items: NavItem[] }[] = [
   },
   {
     group: "",
-    items: [{ href: "/ayarlar", label: "Ayarlar", icon: Settings, description: "Tercihler ve veri" }],
+    items: [
+      { href: "/kasa", label: "Kasa", icon: KeyRound, description: "Şifreler ve gizli anahtarlar" },
+      { href: "/ayarlar", label: "Ayarlar", icon: Settings, description: "Tercihler, güvenlik ve veri" },
+    ],
   },
 ]
 

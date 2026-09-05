@@ -2,7 +2,8 @@
 
 import { and, eq, sql } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
-import { db, ready } from "@/db"
+import { db } from "@/db"
+import { requireSession } from "@/lib/auth/guard"
 import { goalContributions, goals, transactions } from "@/db/schema"
 import { toMinor, todayISO } from "@/lib/format"
 import { convertToBase } from "@/lib/fx"
@@ -49,13 +50,13 @@ export async function saveGoal(_prev: ActionState, fd: FormData): Promise<Action
 }
 
 export async function deleteGoal(id: string) {
-  await ready()
+  await requireSession()
   await db.delete(goals).where(eq(goals.id, id))
   touch()
 }
 
 export async function setGoalStatus(id: string, status: string) {
-  await ready()
+  await requireSession()
   await db
     .update(goals)
     .set({ status, completedAt: status === "done" ? nowISO() : null, updatedAt: nowISO() })
@@ -91,19 +92,19 @@ export async function addContribution(_prev: ActionState, fd: FormData): Promise
 }
 
 export async function deleteContribution(id: string) {
-  await ready()
+  await requireSession()
   await db.delete(goalContributions).where(eq(goalContributions.id, id))
   touch()
 }
 
 export async function withdrawAll(goalId: string) {
-  await ready()
+  await requireSession()
   await db.delete(goalContributions).where(eq(goalContributions.goalId, goalId))
   touch()
 }
 
 export async function purchaseGoal(goalId: string) {
-  await ready()
+  await requireSession()
   const [goal] = await db.select().from(goals).where(eq(goals.id, goalId))
   if (!goal) return
 
@@ -139,7 +140,7 @@ export async function purchaseGoal(goalId: string) {
 }
 
 export async function releaseFromTransaction(transactionId: string) {
-  await ready()
+  await requireSession()
   await db.delete(goalContributions).where(and(eq(goalContributions.transactionId, transactionId)))
   touch()
 }

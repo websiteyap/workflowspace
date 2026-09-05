@@ -6,7 +6,7 @@ import { type LibSQLDatabase, drizzle } from "drizzle-orm/libsql"
 import * as schema from "./schema"
 
 const url = process.env.DATABASE_URL ?? "file:./data/source.db"
-const SCHEMA_VERSION = "3"
+const SCHEMA_VERSION = "4"
 
 const globalForDb = globalThis as unknown as {
   __sourceDbClient?: Client
@@ -175,6 +175,23 @@ const DDL = [
     payment_id TEXT REFERENCES payments(id) ON DELETE SET NULL,
     method TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    subject TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    expires_at TEXT NOT NULL,
+    last_seen_at TEXT,
+    user_agent TEXT,
+    ip TEXT,
+    revoked_at TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS sessions_expires_idx ON sessions(expires_at)`,
+  `CREATE TABLE IF NOT EXISTS vault_items (
+    id TEXT PRIMARY KEY,
+    cipher TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   )`,
   `CREATE TABLE IF NOT EXISTS goals (
     id TEXT PRIMARY KEY,

@@ -51,6 +51,15 @@ export const TASK_STATUS: Option[] = [
   { value: "done", label: "Tamamlandı", tone: "green" },
 ]
 
+export const VAULT_CATEGORY: Option[] = [
+  { value: "server", label: "Sunucu / SSH", tone: "violet" },
+  { value: "hosting", label: "Hosting / panel", tone: "blue" },
+  { value: "api", label: "API anahtarı", tone: "amber" },
+  { value: "database", label: "Veritabanı", tone: "green" },
+  { value: "client", label: "Müşteri erişimi", tone: "neutral" },
+  { value: "other", label: "Diğer", tone: "neutral" },
+]
+
 export const GOAL_TYPE: Option[] = [
   { value: "subscription", label: "Abonelik", tone: "violet" },
   { value: "book", label: "Kitap", tone: "amber" },

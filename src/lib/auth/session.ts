@@ -15,20 +15,24 @@ function secret() {
   return cachedSecret
 }
 
-export async function createSessionToken(subject: string) {
+export async function createSessionToken(subject: string, sessionId: string) {
   return new SignJWT({})
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(subject)
+    .setJti(sessionId)
     .setIssuedAt()
     .setExpirationTime(`${SESSION_MAX_AGE}s`)
     .sign(secret())
 }
 
-export async function verifySessionToken(token: string | undefined | null) {
+export type SessionClaims = { subject: string; sessionId: string }
+
+export async function verifySessionToken(token: string | undefined | null): Promise<SessionClaims | null> {
   if (!token) return null
   try {
     const { payload } = await jwtVerify(token, secret(), { algorithms: ["HS256"] })
-    return typeof payload.sub === "string" ? payload.sub : null
+    if (typeof payload.sub !== "string" || typeof payload.jti !== "string") return null
+    return { subject: payload.sub, sessionId: payload.jti }
   } catch {
     return null
   }

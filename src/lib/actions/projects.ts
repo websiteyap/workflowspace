@@ -2,7 +2,8 @@
 
 import { and, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
-import { db, ready } from "@/db"
+import { db } from "@/db"
+import { requireSession } from "@/lib/auth/guard"
 import { projectDomains, projectItems, projects } from "@/db/schema"
 import { CYCLE_MONTHS } from "@/lib/constants"
 import { addMonths, toMinor, todayISO } from "@/lib/format"
@@ -93,13 +94,13 @@ export async function saveProject(_prev: ActionState, fd: FormData): Promise<Act
 }
 
 export async function deleteProjectById(id: string) {
-  await ready()
+  await requireSession()
   await db.delete(projects).where(eq(projects.id, id))
   touch()
 }
 
 export async function updateProjectStatus(id: string, status: string) {
-  await ready()
+  await requireSession()
   await db
     .update(projects)
     .set({
@@ -113,13 +114,13 @@ export async function updateProjectStatus(id: string, status: string) {
 }
 
 export async function markMaintenanceDone(id: string) {
-  await ready()
+  await requireSession()
   await db.update(projects).set({ lastMaintenanceAt: todayISO(), updatedAt: nowISO() }).where(eq(projects.id, id))
   touch(id)
 }
 
 export async function advancePayment(id: string) {
-  await ready()
+  await requireSession()
   const [project] = await db.select().from(projects).where(eq(projects.id, id))
   if (!project) return
   const months = CYCLE_MONTHS[project.billingCycle] ?? 0
@@ -169,7 +170,7 @@ export async function saveProjectItem(_prev: ActionState, fd: FormData): Promise
 }
 
 export async function deleteProjectItem(id: string, projectId: string) {
-  await ready()
+  await requireSession()
   await db.delete(projectItems).where(and(eq(projectItems.id, id), eq(projectItems.projectId, projectId)))
   touch(projectId)
 }
@@ -202,7 +203,7 @@ export async function saveDomain(_prev: ActionState, fd: FormData): Promise<Acti
 }
 
 export async function deleteDomain(id: string, projectId: string) {
-  await ready()
+  await requireSession()
   await db.delete(projectDomains).where(and(eq(projectDomains.id, id), eq(projectDomains.projectId, projectId)))
   touch(projectId)
 }

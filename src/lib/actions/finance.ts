@@ -2,7 +2,8 @@
 
 import { and, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
-import { db, ready } from "@/db"
+import { db } from "@/db"
+import { requireSession } from "@/lib/auth/guard"
 import { goalContributions, payments, transactions } from "@/db/schema"
 import { addMonths, toMinor, todayISO } from "@/lib/format"
 import { convertToBase } from "@/lib/fx"
@@ -92,7 +93,7 @@ async function applyGoalAllocation(
 }
 
 export async function deleteTransaction(id: string) {
-  await ready()
+  await requireSession()
   await db.delete(transactions).where(eq(transactions.id, id))
   touch()
 }
@@ -132,13 +133,13 @@ export async function savePayment(_prev: ActionState, fd: FormData): Promise<Act
 }
 
 export async function deletePayment(id: string) {
-  await ready()
+  await requireSession()
   await db.delete(payments).where(eq(payments.id, id))
   touch()
 }
 
 export async function markPaymentPaid(id: string, paidDate?: string) {
-  await ready()
+  await requireSession()
   const [row] = await db.select().from(payments).where(eq(payments.id, id))
   if (!row || row.status === "paid") return
   const date = paidDate ?? todayISO()
@@ -192,7 +193,7 @@ export async function markPaymentPaid(id: string, paidDate?: string) {
 }
 
 export async function unmarkPayment(id: string) {
-  await ready()
+  await requireSession()
   await db.update(payments).set({ status: "pending", paidDate: null, updatedAt: nowISO() }).where(eq(payments.id, id))
   await db.delete(transactions).where(eq(transactions.paymentId, id))
   touch()

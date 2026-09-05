@@ -1,7 +1,8 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { db, ready } from "@/db"
+import { db } from "@/db"
+import { requireSession } from "@/lib/auth/guard"
 import {
   goalContributions,
   goals,
@@ -21,7 +22,7 @@ const touchAll = () => {
 }
 
 export async function clearAllData() {
-  await ready()
+  await requireSession()
   await db.delete(goalContributions)
   await db.delete(goals)
   await db.delete(transactions)
@@ -35,7 +36,7 @@ export async function clearAllData() {
 }
 
 export async function exportData() {
-  await ready()
+  await requireSession()
   const [p, d, i, t, n, pm, tx, g, gc] = await Promise.all([
     db.select().from(projects),
     db.select().from(projectDomains),
@@ -80,7 +81,7 @@ type Backup = {
 }
 
 export async function importData(json: string) {
-  await ready()
+  await requireSession()
 
   let parsed: Backup
   try {

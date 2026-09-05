@@ -2,7 +2,8 @@
 
 import { eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
-import { db, ready } from "@/db"
+import { db } from "@/db"
+import { requireSession } from "@/lib/auth/guard"
 import { notes } from "@/db/schema"
 import { type ActionState, bool, newId, nowISO, reqStr, ref, run, str } from "./helpers"
 
@@ -31,14 +32,14 @@ export async function saveNote(_prev: ActionState, fd: FormData): Promise<Action
 }
 
 export async function deleteNote(id: string) {
-  await ready()
+  await requireSession()
   await db.delete(notes).where(eq(notes.id, id))
   revalidatePath("/notlar")
   revalidatePath("/")
 }
 
 export async function togglePin(id: string, pinned: boolean) {
-  await ready()
+  await requireSession()
   await db.update(notes).set({ pinned: pinned ? 1 : 0, updatedAt: nowISO() }).where(eq(notes.id, id))
   revalidatePath("/notlar")
 }

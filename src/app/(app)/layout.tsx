@@ -1,10 +1,16 @@
 import { Sidebar } from "@/components/layout/sidebar"
 import { Topbar } from "@/components/layout/topbar"
 import { ReminderEngine } from "@/components/reminders/reminder-engine"
+import { redirect } from "next/navigation"
+import { activeSession, touchSession } from "@/lib/auth/store"
 import { moneyContext } from "@/lib/display-currency"
 import { searchIndex } from "@/lib/queries"
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const session = await activeSession()
+  if (!session) redirect("/giris")
+  void touchSession(session.id)
+
   const [entries, money] = await Promise.all([searchIndex(), moneyContext()])
 
   return (
