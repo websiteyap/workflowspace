@@ -22,12 +22,24 @@ npm run dev
 
 Veritabanı ilk çalıştırmada `data/source.db` olarak oluşur; ayrı bir migration adımı yoktur.
 
+## Parola
+
+Parola ve kullanıcı adı **Ayarlar → Hesap** bölümünden değiştirilir; yeni değerler
+veritabanında saklanır ve ortam değişkenlerini ezer. Parola değişince bu cihaz dışındaki
+tüm oturumlar kapanır.
+
+Parolayı unutursan sunucuda:
+
+```bash
+/opt/backup/source-reset-password.sh 'yeni-parola-en-az-12-karakter'
+```
+
 ## Ortam değişkenleri
 
 | Değişken | Açıklama |
 |---|---|
 | `AUTH_USERNAME` | Giriş kullanıcı adı |
-| `AUTH_PASSWORD_HASH` | `scrypt:<salt>:<hash>` — `scripts/hash-password.mjs` üretir |
+| `AUTH_PASSWORD_HASH` | Başlangıç parolası; `scripts/hash-password.mjs` üretir. Uygulamadan değiştirilince veritabanındaki değer geçerli olur |
 | `AUTH_SECRET` | Oturum çerezini imzalar, en az 32 karakter |
 | `DATABASE_URL` | Varsayılan `file:./data/source.db` |
 

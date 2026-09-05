@@ -7,7 +7,8 @@ import { redirect } from "next/navigation"
 import { db, ready } from "@/db"
 import { loginAttempts } from "@/db/schema"
 import { audit } from "@/lib/observability"
-import { verifyPassword } from "@/lib/auth/password"
+import { hashPassword, verifyPassword } from "@/lib/auth/password"
+import { PASSWORD_KEY, USERNAME_KEY, credentialsOverridden, currentPasswordHash, currentUsername } from "@/lib/auth/credentials"
 import { open, seal } from "@/lib/auth/secret-box"
 import { SESSION_COOKIE, SESSION_MAX_AGE, createSessionToken } from "@/lib/auth/session"
 import {
@@ -96,8 +97,7 @@ export async function login(_prev: ActionState, formData: FormData): Promise<Act
 
   if (!username || !password) return { error: "Kullanıcı adı ve parola gerekli." }
 
-  const expectedUser = process.env.AUTH_USERNAME
-  const expectedHash = process.env.AUTH_PASSWORD_HASH
+  const [expectedUser, expectedHash] = await Promise.all([currentUsername(), currentPasswordHash()])
   if (!expectedUser || !expectedHash || !process.env.AUTH_SECRET) {
     return { error: "Sunucu kimlik doğrulama için yapılandırılmamış." }
   }
@@ -186,7 +186,7 @@ export async function disableTwoFactor(password: string) {
   const session = await activeSession()
   if (!session) return { error: "Oturum geçersiz." }
 
-  if (!(await verifyPassword(password, process.env.AUTH_PASSWORD_HASH))) {
+  if (!(await verifyPassword(password, (await currentPasswordHash()) ?? undefined))) {
     return { error: "Parola hatalı." }
   }
 
@@ -210,4 +210,68 @@ export async function endOtherSessions() {
   if (!session) return
   await audit("sessions_revoked_all", "auth", { sessionId: session.id })
   await revokeAllExcept(session.id)
+}
+
+const MIN_PASSWORD_LENGTH = 12
+
+export async function changePassword(currentPassword: string, newPassword: string, code: string) {
+  const session = await activeSession()
+  if (!session) return { error: "Oturum geçersiz." }
+
+  const key = await clientKey()
+  const limit = await rateLimit(`change:${key}`)
+  if (!limit.allowed) {
+    return { error: `Çok fazla deneme. ${limit.retryInMinutes} dakika sonra tekrar deneyin.` }
+  }
+
+  if (!(await verifyPassword(currentPassword, (await currentPasswordHash()) ?? undefined))) {
+    await audit("password_change_failed", "auth", { sessionId: session.id })
+    return { error: "Mevcut parola hatalı." }
+  }
+
+  const trimmed = newPassword.normalize("NFKC")
+  if (trimmed.length < MIN_PASSWORD_LENGTH) {
+    return { error: `Yeni parola en az ${MIN_PASSWORD_LENGTH} karakter olmalı.` }
+  }
+  if (trimmed === currentPassword) {
+    return { error: "Yeni parola eskisiyle aynı olamaz." }
+  }
+
+  const sealedSecret = await getSetting(TOTP_SECRET)
+  if (sealedSecret) {
+    if (!code) return { error: "Doğrulama kodu gerekli.", stage: "need-code" }
+    const secret = open(sealedSecret)
+    if (!verifyCode(secret, code) && !(await consumeRecoveryCode(code))) {
+      return { error: "Doğrulama kodu hatalı.", stage: "need-code" }
+    }
+  }
+
+  await setSetting(PASSWORD_KEY, await hashPassword(trimmed))
+  await clearLimit(`change:${key}`)
+  await revokeAllExcept(session.id)
+  await audit("password_changed", "auth", { sessionId: session.id })
+
+  return { ok: true }
+}
+
+export async function changeUsername(password: string, newUsername: string) {
+  const session = await activeSession()
+  if (!session) return { error: "Oturum geçersiz." }
+
+  if (!(await verifyPassword(password, (await currentPasswordHash()) ?? undefined))) {
+    return { error: "Parola hatalı." }
+  }
+
+  const trimmed = newUsername.trim()
+  if (trimmed.length < 3) return { error: "Kullanıcı adı en az 3 karakter olmalı." }
+
+  await setSetting(USERNAME_KEY, trimmed)
+  await audit("username_changed", "auth", { sessionId: session.id, summary: trimmed })
+  return { ok: true }
+}
+
+export async function accountInfo() {
+  const session = await activeSession()
+  if (!session) return { username: null, overridden: false }
+  return { username: await currentUsername(), overridden: await credentialsOverridden() }
 }
